@@ -14,10 +14,20 @@ void setup()
 }
 
 void loop() {
+//  if (counter == 0)
+//    Serial.println("counter,value");
+//  if (counter < 1000) {
+//    Serial.print(counter);
+//    Serial.print(",");
+//    Serial.println(analogRead(FRONT_RIGHT));
+//    delay(10);
+//    counter++;
+//  }
+  
   int sensorVal[READ_TIMES];
   int sortedSensorVal[READ_TIMES];
   for (int i = 0; i < READ_TIMES; i++) {
-    sensorVal[i] = analogRead(LEFT);         
+    sensorVal[i] = analogRead(FRONT_LEFT);         
     delay(10);
   }
   sortedSensorVal[0] = sensorVal[0];
