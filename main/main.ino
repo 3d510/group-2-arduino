@@ -14,8 +14,6 @@
 #define encoderLPinA 11
 #define encoderLPinB 13
 
-int val;
-
 int encoderRPos = 0;
 int encoderRPinALast = LOW;
 
@@ -35,11 +33,42 @@ void setup() {
   
   Serial.begin (9600);
   // attachInterrupt(1, doEncoder, RISING); 
-  PCintPort::attachInterrupt(encoderRPinA, &doEncoder, RISING);
+  PCintPort::attachInterrupt(encoderLPinA, &doEncoderLeft, RISING);
+  PCintPort::attachInterrupt(encoderRPinA, &doEncoderRight, RISING);
   md.init();
 }
 
 void loop() {
+  md.setSpeed(200,185);
+  Serial.println(readRpmWithInterrupt(true));
+  Serial.println(readRmpWithInterrupt(false));
+}
+
+float readRpmWithInterrupt(bool isLeftWheel) {
+//  Time = micros();
+//  md.setSpeeds(200, 185);
+//  if (Time > TEST_TIME * 1000000) {
+//    if (counter == 0) {
+//      int encoderPos = isLeftWheel * encoderLPos + (1 - isLeftWheel) * encoderRPos;
+//      float rpm = 60 / (562.25 / (encoderPos / TEST_TIME));
+//      Serial.print(rpm);
+//    }
+//    counter = 1;
+//  }
+
+  delay(TEST_TIMES * 1000000);
+  if (isLeftWheel) {
+    float rpm = 60 / (562.25 / (encoderLPos / TEST_TIME));
+    encoderLPos = 0;
+    return rpm;
+  } else {
+    float rpm = 60 / (562.25 / (encoderRPos / TEST_TIME));
+    encoderRPos = 0;
+    return rpm;
+  }
+}
+
+float readRpmWithoutInterrupt(bool isLeftWheel) {
 //  Time = micros();
 //  md.setSpeeds(400,400);
 //  if (Time <= 2000000) {
@@ -57,19 +86,17 @@ void loop() {
 //      Serial.print(encoderRPos);
 //    counter = 1;
 //  }
-  Time = micros();
-  md.setSpeeds(200,185);
-  if (Time > TEST_TIME * 1000000) {
-    if (counter == 0) {
-      float rpm = 60 / (562.25 / (encoderRPos / TEST_TIME));
-      Serial.print(rpm);
-    }
-    counter = 1;
-  }
-  
 }
 
-void doEncoder() {
+void doEncoderLeft() {
+  if (digitalRead(encoderLPinA) == digitalRead(encoderLPinB)) {
+    encoderLPos++;
+  } else {
+    encoderLPos--;
+  }
+}
+
+void doEncoderRight() {
   if (digitalRead(encoderRPinA) == digitalRead(encoderRPinB)) {
     encoderRPos++;
   } else {
@@ -106,9 +133,9 @@ float readSingleSensor(int sensorNumber) {
     case FRONT_RIGHT: 
       return 8544.11/readValue - 7.29;
     case FRONT_LEFT: 
-      return 8068.98/readValue - 5.63
+      return 8068.98/readValue - 5.63;
     case LEFT:
-      return 8766.22/readValue - 7.35
+      return 8766.22/readValue - 7.35;
     case RIGHT:
       return 7904.38/readValue - 5.62;
     case BACK:
