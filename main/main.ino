@@ -39,7 +39,23 @@ void setup() {
 }
 
 void loop() {
-  md.setSpeed(200,185);
+  char command;
+  if (Serial.available()) {
+    command = Serial.read();
+    switch(command) {
+      case 'f': md.setSpeed(200, 185);
+                break;
+      case 'l': md.setSpeed(-200, 185);
+                break;
+      case 'r': md.setSpeed(200, -185);
+                break;
+      case 'b': md.setSpeed(-200, -185);
+                break;
+      case 's': md.setSpeed(0, 0);
+                md.setBrakes(400, 400);
+    }
+  }
+  //md.setSpeed(200,185);
   Serial.println(readRpmWithInterrupt(true));
   Serial.println(readRmpWithInterrupt(false));
 }
