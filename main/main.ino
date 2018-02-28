@@ -14,11 +14,18 @@
 #define encoderLPinA 11
 #define encoderLPinB 13
 
+const double FORWARD_PWM_L = 1750 * 0.087;
+const double FORWARD_PWM_R = 1750 * 0.087; 
+
 volatile int encoderRPos = 0;
-int aencoderRPinALast = LOW;
+int encoderRPinALast = LOW;
 
 volatile int encoderLPos = 0;
 int encoderLPinALast = LOW;
+
+double  motorEncoderDiff = 0;
+double  motorDiffOutput = 0;
+double  motorTargetDiff = 0;
 
 int n = LOW;
 //int counter = 0;
@@ -60,6 +67,7 @@ void loop() {
 //      Serial.println(rpms[i]);
 //    }
 //    done = true;
+      setPid(FORWARD_PWM_L, FORWARD_PWM_R, 300);
   } else {
     md.setSpeeds(0,0);
   }
@@ -158,4 +166,56 @@ float readRpmWithoutInterrupt(bool isLeftWheel) {
 //  }
 }
 
+// motorTargetDiff is the difference between the motors. set 0 to turn left or right, or set a positive value to move forward
+void setPid(float finalLPWM, float finalRPWM, int setPoint) {
+    float kp = 1.6, ki = 0.3, kd = 0.6;
+    PID motorDiffPID(&motorEncoderDiff, &motorDiffOutput, &motorTargetDiff, kp, ki, kd, DIRECT);
+    motorDiffPID.Reset();
+    motorDiffPID.SetMode(AUTOMATIC);
+    motorDiffPID.SetOutputLimits(-2000, 2000);
+    motorDiffPID.SetSampleTime(10);
 
+    while (true) {
+        left = readRpmWithInterrupt(true, 0.02);
+        right = readRpmWithInterrupt(false, 0.02);
+        motorEncoderDiff = right - left;
+        motorDiffPID.Compute();
+        
+        finalLPWM -= motorDiffOutput / 50;
+        finalRPWM += motorDiffOutput / 50;
+
+        finalLPWM = constrain(finalLPWM, 0, 255);
+        finalRPWM = constrain(finalRPWM, 0, 255);
+        
+          // Encoder Print
+          Serial.print("p##");  
+          Serial.print(count);
+          Serial.print(" ");
+          Serial.print(finalLPWM);
+          Serial.print(" ");
+          Serial.print(finalRPWM);
+          Serial.print(" ");
+          Serial.print(motorLAccmEncoderCount);
+          Serial.print(" ");
+          Serial.print(motorRAccmEncoderCount);
+          Serial.print(" ");
+          Serial.print(motorEncoderDiff);
+          Serial.print(" ");
+          Serial.println(motorDiffOutput);
+          
+        if (left < setPoint) {
+            md.setM1Speed(finalLPWM / 255.0 * 400.0);
+        }
+        else {
+            md.setM1Brake(400);
+        }
+
+        if (right <  setPoint) {
+            md.setM2Speed(finalRPWM / 255.0 * 400.0);
+        }
+        else {
+            md.setM2Brake(400);
+        }
+        delay(10);
+    }
+}
