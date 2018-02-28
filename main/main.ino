@@ -1,7 +1,7 @@
 #include "DualVNH5019MotorShield.h"
 #include "PinChangeInt.h"
 
-#define TEST_TIME 2.0
+#define TEST_TIME 0.002
 #define FRONT_RIGHT A0
 #define FRONT_CENTER A1
 #define FRONT_LEFT A2
@@ -14,14 +14,14 @@
 #define encoderLPinA 11
 #define encoderLPinB 13
 
-int encoderRPos = 0;
-int encoderRPinALast = LOW;
+volatile int encoderRPos = 0;
+int aencoderRPinALast = LOW;
 
-int encoderLPos = 0;
+volatile int encoderLPos = 0;
 int encoderLPinALast = LOW;
 
 int n = LOW;
-int counter = 0;
+//int counter = 0;
 DualVNH5019MotorShield md;
 long long Time;
 
@@ -38,70 +38,64 @@ void setup() {
   md.init();
 }
 
+bool done = false;
+int count = 1;
+float rpms[200];
+
 void loop() {
-  md.setSpeed(200,185);
-  Serial.println(readRpmWithInterrupt(true));
-  Serial.println(readRmpWithInterrupt(false));
+  if (!done) {    
+    //md.setSpeeds(100, 0);
+    
+    //delay(3000);
+    //Serial.print(readRpmWithInterrupt(false, 0.02));
+//    rpms[0] = abs(readRpmWithInterrupt(false, 0.02));
+//    md.setSpeeds(300, 0);
+//    while (count < 200) {
+//      rpms[count] = abs(readRpmWithInterrupt(false, 0.02));
+//      count++;
+//    }
+//    for (int i = 0; i < count; i++) {
+//      Serial.print(i);
+//      Serial.print(","); 
+//      Serial.println(rpms[i]);
+//    }
+//    done = true;
+  } else {
+    md.setSpeeds(0,0);
+  }
+
 }
 
-float readRpmWithInterrupt(bool isLeftWheel) {
-//  Time = micros();
-//  md.setSpeeds(200, 185);
-//  if (Time > TEST_TIME * 1000000) {
-//    if (counter == 0) {
-//      int encoderPos = isLeftWheel * encoderLPos + (1 - isLeftWheel) * encoderRPos;
-//      float rpm = 60 / (562.25 / (encoderPos / TEST_TIME));
-//      Serial.print(rpm);
-//    }
-//    counter = 1;
-//  }
-
-  delay(TEST_TIMES * 1000000);
+float readRpmWithInterrupt(bool isLeftWheel, float delayTime) { // delayTime in seconds
   if (isLeftWheel) {
-    float rpm = 60 / (562.25 / (encoderLPos / TEST_TIME));
     encoderLPos = 0;
+    delay(delayTime * 1000);
+    float rpm = 60 / (562.25 / ((encoderLPos - 1) / delayTime));
     return rpm;
   } else {
-    float rpm = 60 / (562.25 / (encoderRPos / TEST_TIME));
     encoderRPos = 0;
+    delay(delayTime * 1000);
+    float rpm = 60 / (562.25 / ((encoderRPos - 1) / delayTime));
     return rpm;
   }
-}
-
-float readRpmWithoutInterrupt(bool isLeftWheel) {
-//  Time = micros();
-//  md.setSpeeds(400,400);
-//  if (Time <= 2000000) {
-//    n = digitalRead(encoderRPinA);
-//    if ((encoderRPinALast == LOW) && (n == HIGH)) {
-//      if (digitalRead(encoderRPinB) == LOW) {
-//        encoderRPos--;
-//      } else {
-//        encoderRPos++;
-//      }
-//    }
-//    encoderRPinALast = n;
-//  } else {
-//    if (counter == 0)
-//      Serial.print(encoderRPos);
-//    counter = 1;
-//  }
 }
 
 void doEncoderLeft() {
-  if (digitalRead(encoderLPinA) == digitalRead(encoderLPinB)) {
-    encoderLPos++;
-  } else {
-    encoderLPos--;
-  }
+//  if (digitalRead(encoderLPinA) == digitalRead(encoderLPinB)) {
+//    encoderLPos++;
+//  } else {
+//    encoderLPos--;
+//  }
+  encoderLPos++;
 }
 
 void doEncoderRight() {
-  if (digitalRead(encoderRPinA) == digitalRead(encoderRPinB)) {
-    encoderRPos++;
-  } else {
-    encoderRPos--;
-  }
+//  if (digitalRead(encoderRPinA) == digitalRead(encoderRPinB)) {
+//    encoderRPos++;
+//  } else {
+//    encoderRPos--;
+//  }
+  encoderRPos++;
 }
 
 float readSingleSensor(int sensorNumber) {
@@ -142,6 +136,26 @@ float readSingleSensor(int sensorNumber) {
       return 8068.41/readValue - 6.77;
   }
   
+}
+
+float readRpmWithoutInterrupt(bool isLeftWheel) {
+//  Time = micros();
+//  md.setSpeeds(400,400);
+//  if (Time <= 2000000) {
+//    n = digitalRead(encoderRPinA);
+//    if ((encoderRPinALast == LOW) && (n == HIGH)) {
+//      if (digitalRead(encoderRPinB) == LOW) {
+//        encoderRPos--;
+//      } else {
+//        encoderRPos++;
+//      }
+//    }
+//    encoderRPinALast = n;
+//  } else {
+//    if (counter == 0)
+//      Serial.print(encoderRPos);
+//    counter = 1;
+//  }
 }
 
 
