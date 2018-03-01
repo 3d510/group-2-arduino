@@ -20,6 +20,8 @@ int aencoderRPinALast = LOW;
 volatile int encoderLPos = 0;
 int encoderLPinALast = LOW;
 
+int prevError = 0;
+
 int n = LOW;
 //int counter = 0;
 DualVNH5019MotorShield md;
@@ -60,10 +62,20 @@ void loop() {
 //      Serial.println(rpms[i]);
 //    }
 //    done = true;
+      go();
   } else {
     md.setSpeeds(0,0);
   }
 
+}
+
+void go() {
+  int m1Encoder = readTicksWithInterrupt(true, 0.02);
+  int m2Encoder = readTicksWithInterrupt(false, 0.02);
+  Serial.println(readRpmWithInterrupt(true, 0.02));
+  Serial.println(readRpmWithInterrupt(false, 0.02));
+  int output = computePid(m1Encoder, m2Encoder);
+  md.setSpeeds(300 - output, 300 + output);
 }
 
 float readRpmWithInterrupt(bool isLeftWheel, float delayTime) { // delayTime in seconds
@@ -80,6 +92,17 @@ float readRpmWithInterrupt(bool isLeftWheel, float delayTime) { // delayTime in 
   }
 }
 
+int readTicksWithInterrupt(bool isLeftWheel, float delayTime) { // delayTime in seconds
+  if (isLeftWheel) {
+    encoderLPos = 0;
+    delay(delayTime * 1000);
+    return encoderLPos;
+  } else {
+    encoderRPos = 0;
+    delay(delayTime * 1000);
+    return encoderRPos;
+  }
+}
 void doEncoderLeft() {
 //  if (digitalRead(encoderLPinA) == digitalRead(encoderLPinB)) {
 //    encoderLPos++;
@@ -158,4 +181,19 @@ float readRpmWithoutInterrupt(bool isLeftWheel) {
 //  }
 }
 
+int computePid(int leftTicks, int rightTicks) {
+    int error, pwm1 = 255, pwm2 = 255;
+    float integral, derivative, output;
+    float Kp = 0.75;  //0-0.1
+    float Kd = 1.65;  //1-2
+    float Ki = 0.75;  //0.5-1
 
+    error = leftTicks - rightTicks;
+    integral += error;
+    derivative = error - prevError;
+    output = Kp * error + Ki * integral + Kd * derivative;
+    prevError = error;
+
+    pwm1 = output;
+    return pwm1;
+}
