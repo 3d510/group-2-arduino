@@ -1,5 +1,6 @@
 #include "DualVNH5019MotorShield.h"
 #include "PinChangeInt.h"
+#include <PID_v1.h>
 
 #define TEST_TIME 0.002
 #define FRONT_RIGHT A0
@@ -26,6 +27,8 @@ int encoderLPinALast = LOW;
 double  motorEncoderDiff = 0;
 double  motorDiffOutput = 0;
 double  motorTargetDiff = 0;
+
+int prevError = 0;
 
 int n = LOW;
 //int counter = 0;
@@ -67,11 +70,20 @@ void loop() {
 //      Serial.println(rpms[i]);
 //    }
 //    done = true;
-      setPid(FORWARD_PWM_L, FORWARD_PWM_R, 300);
+      go();
   } else {
     md.setSpeeds(0,0);
   }
 
+}
+
+void go() {
+  int m1Encoder = readTicksWithInterrupt(true, 0.02);
+  int m2Encoder = readTicksWithInterrupt(false, 0.02);
+  Serial.println(readRpmWithInterrupt(true, 0.02));
+  Serial.println(readRpmWithInterrupt(false, 0.02));
+  int output = computePid(m1Encoder, m2Encoder);
+  md.setSpeeds(300 - output, 300 + output);
 }
 
 float readRpmWithInterrupt(bool isLeftWheel, float delayTime) { // delayTime in seconds
@@ -88,6 +100,17 @@ float readRpmWithInterrupt(bool isLeftWheel, float delayTime) { // delayTime in 
   }
 }
 
+int readTicksWithInterrupt(bool isLeftWheel, float delayTime) { // delayTime in seconds
+  if (isLeftWheel) {
+    encoderLPos = 0;
+    delay(delayTime * 1000);
+    return encoderLPos;
+  } else {
+    encoderRPos = 0;
+    delay(delayTime * 1000);
+    return encoderRPos;
+  }
+}
 void doEncoderLeft() {
 //  if (digitalRead(encoderLPinA) == digitalRead(encoderLPinB)) {
 //    encoderLPos++;
@@ -170,14 +193,14 @@ float readRpmWithoutInterrupt(bool isLeftWheel) {
 void setPid(float finalLPWM, float finalRPWM, int setPoint) {
     float kp = 1.6, ki = 0.3, kd = 0.6;
     PID motorDiffPID(&motorEncoderDiff, &motorDiffOutput, &motorTargetDiff, kp, ki, kd, DIRECT);
-    motorDiffPID.Reset();
+    //motorDiffPID.Reset();
     motorDiffPID.SetMode(AUTOMATIC);
     motorDiffPID.SetOutputLimits(-2000, 2000);
     motorDiffPID.SetSampleTime(10);
 
     while (true) {
-        left = readRpmWithInterrupt(true, 0.02);
-        right = readRpmWithInterrupt(false, 0.02);
+        double left = readRpmWithInterrupt(true, 0.02);
+        double right = readRpmWithInterrupt(false, 0.02);
         motorEncoderDiff = right - left;
         motorDiffPID.Compute();
         
@@ -195,9 +218,9 @@ void setPid(float finalLPWM, float finalRPWM, int setPoint) {
           Serial.print(" ");
           Serial.print(finalRPWM);
           Serial.print(" ");
-          Serial.print(motorLAccmEncoderCount);
+          //Serial.print(motorLAccmEncoderCount);
           Serial.print(" ");
-          Serial.print(motorRAccmEncoderCount);
+          //Serial.print(motorRAccmEncoderCount);
           Serial.print(" ");
           Serial.print(motorEncoderDiff);
           Serial.print(" ");
@@ -219,3 +242,21 @@ void setPid(float finalLPWM, float finalRPWM, int setPoint) {
         delay(10);
     }
 }
+
+int computePid(int leftTicks, int rightTicks) {
+    int error, pwm1 = 255, pwm2 = 255;
+    float integral, derivative, output;
+    float Kp = 0.75;  //0-0.1
+    float Kd = 1.65;  //1-2
+    float Ki = 0.75;  //0.5-1
+
+    error = leftTicks - rightTicks;
+    integral += error;
+    derivative = error - prevError;
+    output = Kp * error + Ki * integral + Kd * derivative;
+    prevError = error;
+
+    pwm1 = output;
+    return pwm1;
+}
+
