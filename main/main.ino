@@ -15,25 +15,20 @@
 #define encoderLPinA 11
 #define encoderLPinB 13
 
-const double FORWARD_PWM_L = 1750 * 0.087;
-const double FORWARD_PWM_R = 1750 * 0.087; 
-
 volatile int encoderRPos = 0;
 int encoderRPinALast = LOW;
 
 volatile int encoderLPos = 0;
 int encoderLPinALast = LOW;
 
-double  motorEncoderDiff = 0;
-double  motorDiffOutput = 0;
-double  motorTargetDiff = 0;
-
 int prevError = 0;
 
 int n = LOW;
-//int counter = 0;
 DualVNH5019MotorShield md;
 long long Time;
+
+int leftTickPrevError = 0, leftTickPrevPrevError = 0, rightTickPrevError = 0, rightTickPrevPrevError = 0;
+int leftPrevOutput = 0, rightPrevOutput = 0;
 
 void setup() {
   pinMode (encoderLPinA, INPUT);
@@ -42,7 +37,6 @@ void setup() {
   pinMode (encoderRPinB, INPUT);
   
   Serial.begin (9600);
-  // attachInterrupt(1, doEncoder, RISING); 
   PCintPort::attachInterrupt(encoderLPinA, &doEncoderLeft, RISING);
   PCintPort::attachInterrupt(encoderRPinA, &doEncoderRight, RISING);
   md.init();
@@ -51,39 +45,45 @@ void setup() {
 bool done = false;
 int count = 1;
 float rpms[200];
+int leftTickCount[100];
+int rightTickCount[100];
+int tickDiff[100];
 
 void loop() {
   if (!done) {    
-    //md.setSpeeds(100, 0);
+    md.setSpeeds(150, 150);
     
-    //delay(3000);
-    //Serial.print(readRpmWithInterrupt(false, 0.02));
-//    rpms[0] = abs(readRpmWithInterrupt(false, 0.02));
-//    md.setSpeeds(300, 0);
-//    while (count < 200) {
-//      rpms[count] = abs(readRpmWithInterrupt(false, 0.02));
-//      count++;
-//    }
-//    for (int i = 0; i < count; i++) {
-//      Serial.print(i);
-//      Serial.print(","); 
-//      Serial.println(rpms[i]);
-//    }
-//    done = true;
-      go();
+    delay(3000);
+    
+    leftTickCount[0] = encoderLPos;
+    rightTickCount[0] = encoderRPos;
+    
+    md.setSpeeds(300, 300);
+    
+    while (count < 100) {
+      //rpms[count] = abs(readRpmWithInterrupt(false, 0.02));
+      leftTickCount[count] = encoderLPos;
+      rightTickCount[count] = encoderRPos;
+      encoderLPos = 0;
+      encoderRPos = 0;
+      delay(5);
+      count++;
+    }
+    
+    for (int i = 0; i < count; i++) {
+      Serial.print(i);
+      Serial.print(" "); 
+      Serial.print(leftTickCount[i]);
+      Serial.print(" "); 
+      Serial.println(rightTickCount[i]);
+    }
+    done = true;
+//    goAnalog();
+//    if (millis() >= 2000) done = true;
   } else {
     md.setSpeeds(0,0);
   }
 
-}
-
-void go() {
-  int m1Encoder = readTicksWithInterrupt(true, 0.02);
-  int m2Encoder = readTicksWithInterrupt(false, 0.02);
-  Serial.println(readRpmWithInterrupt(true, 0.02));
-  Serial.println(readRpmWithInterrupt(false, 0.02));
-  int output = computePid(m1Encoder, m2Encoder);
-  md.setSpeeds(300 - output, 300 + output);
 }
 
 float readRpmWithInterrupt(bool isLeftWheel, float delayTime) { // delayTime in seconds
@@ -112,20 +112,10 @@ int readTicksWithInterrupt(bool isLeftWheel, float delayTime) { // delayTime in 
   }
 }
 void doEncoderLeft() {
-//  if (digitalRead(encoderLPinA) == digitalRead(encoderLPinB)) {
-//    encoderLPos++;
-//  } else {
-//    encoderLPos--;
-//  }
   encoderLPos++;
 }
 
 void doEncoderRight() {
-//  if (digitalRead(encoderRPinA) == digitalRead(encoderRPinB)) {
-//    encoderRPos++;
-//  } else {
-//    encoderRPos--;
-//  }
   encoderRPos++;
 }
 
@@ -169,84 +159,22 @@ float readSingleSensor(int sensorNumber) {
   
 }
 
-float readRpmWithoutInterrupt(bool isLeftWheel) {
-//  Time = micros();
-//  md.setSpeeds(400,400);
-//  if (Time <= 2000000) {
-//    n = digitalRead(encoderRPinA);
-//    if ((encoderRPinALast == LOW) && (n == HIGH)) {
-//      if (digitalRead(encoderRPinB) == LOW) {
-//        encoderRPos--;
-//      } else {
-//        encoderRPos++;
-//      }
-//    }
-//    encoderRPinALast = n;
-//  } else {
-//    if (counter == 0)
-//      Serial.print(encoderRPos);
-//    counter = 1;
-//  }
+
+
+
+void goAnalog() {
+  int m1Encoder = readTicksWithInterrupt(true, 0.005);
+  int m2Encoder = readTicksWithInterrupt(false, 0.02);
+  Serial.println(readRpmWithInterrupt(true, 0.02));
+  Serial.println(readRpmWithInterrupt(false, 0.02));
+  int output = computeAnalogPid(m1Encoder, m2Encoder);
+  md.setSpeeds(300 - output, 295 + output);
 }
 
-// motorTargetDiff is the difference between the motors. set 0 to turn left or right, or set a positive value to move forward
-void setPid(float finalLPWM, float finalRPWM, int setPoint) {
-    float kp = 1.6, ki = 0.3, kd = 0.6;
-    PID motorDiffPID(&motorEncoderDiff, &motorDiffOutput, &motorTargetDiff, kp, ki, kd, DIRECT);
-    //motorDiffPID.Reset();
-    motorDiffPID.SetMode(AUTOMATIC);
-    motorDiffPID.SetOutputLimits(-2000, 2000);
-    motorDiffPID.SetSampleTime(10);
-
-    while (true) {
-        double left = readRpmWithInterrupt(true, 0.02);
-        double right = readRpmWithInterrupt(false, 0.02);
-        motorEncoderDiff = right - left;
-        motorDiffPID.Compute();
-        
-        finalLPWM -= motorDiffOutput / 50;
-        finalRPWM += motorDiffOutput / 50;
-
-        finalLPWM = constrain(finalLPWM, 0, 255);
-        finalRPWM = constrain(finalRPWM, 0, 255);
-        
-          // Encoder Print
-          Serial.print("p##");  
-          Serial.print(count);
-          Serial.print(" ");
-          Serial.print(finalLPWM);
-          Serial.print(" ");
-          Serial.print(finalRPWM);
-          Serial.print(" ");
-          //Serial.print(motorLAccmEncoderCount);
-          Serial.print(" ");
-          //Serial.print(motorRAccmEncoderCount);
-          Serial.print(" ");
-          Serial.print(motorEncoderDiff);
-          Serial.print(" ");
-          Serial.println(motorDiffOutput);
-          
-        if (left < setPoint) {
-            md.setM1Speed(finalLPWM / 255.0 * 400.0);
-        }
-        else {
-            md.setM1Brake(400);
-        }
-
-        if (right <  setPoint) {
-            md.setM2Speed(finalRPWM / 255.0 * 400.0);
-        }
-        else {
-            md.setM2Brake(400);
-        }
-        delay(10);
-    }
-}
-
-int computePid(int leftTicks, int rightTicks) {
+int computeAnalogPid(int leftTicks, int rightTicks) {
     int error, pwm1 = 255, pwm2 = 255;
     float integral, derivative, output;
-    float Kp = 0.75;  //0-0.1
+    float Kp = 0.75;  //0-1
     float Kd = 1.65;  //1-2
     float Ki = 0.75;  //0.5-1
 
@@ -259,4 +187,10 @@ int computePid(int leftTicks, int rightTicks) {
     pwm1 = output;
     return pwm1;
 }
+
+
+
+
+
+
 
