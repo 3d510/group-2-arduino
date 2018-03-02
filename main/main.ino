@@ -1,6 +1,5 @@
 #include "DualVNH5019MotorShield.h"
 #include "PinChangeInt.h"
-#include <PID_v1.h>
 
 #define TEST_TIME 0.002
 #define FRONT_RIGHT A0
@@ -51,35 +50,35 @@ int tickDiff[100];
 
 void loop() {
   if (!done) {    
-    md.setSpeeds(150, 150);
-    
-    delay(3000);
-    
-    leftTickCount[0] = encoderLPos;
-    rightTickCount[0] = encoderRPos;
-    
-    md.setSpeeds(300, 300);
-    
-    while (count < 100) {
-      //rpms[count] = abs(readRpmWithInterrupt(false, 0.02));
-      leftTickCount[count] = encoderLPos;
-      rightTickCount[count] = encoderRPos;
-      encoderLPos = 0;
-      encoderRPos = 0;
-      delay(5);
-      count++;
-    }
-    
-    for (int i = 0; i < count; i++) {
-      Serial.print(i);
-      Serial.print(" "); 
-      Serial.print(leftTickCount[i]);
-      Serial.print(" "); 
-      Serial.println(rightTickCount[i]);
-    }
-    done = true;
-//    goAnalog();
-//    if (millis() >= 2000) done = true;
+//    md.setSpeeds(150, 150);
+//    
+//    delay(3000);
+//    
+//    leftTickCount[0] = encoderLPos;
+//    rightTickCount[0] = encoderRPos;
+//    
+//    md.setSpeeds(300, 300);
+//    
+//    while (count < 100) {
+//      //rpms[count] = abs(readRpmWithInterrupt(false, 0.02));
+//      leftTickCount[count] = encoderLPos;
+//      rightTickCount[count] = encoderRPos;
+//      encoderLPos = 0;
+//      encoderRPos = 0;
+//      delay(5);
+//      count++;
+//    }
+//    
+//    for (int i = 0; i < count; i++) {
+//      Serial.print(i);
+//      Serial.print(" "); 
+//      Serial.print(leftTickCount[i]);
+//      Serial.print(" "); 
+//      Serial.println(rightTickCount[i]);
+//    }
+//    done = true;
+    goAnalog(200);
+    if (millis() >= 5000) done = true;
   } else {
     md.setSpeeds(0,0);
   }
@@ -162,13 +161,19 @@ float readSingleSensor(int sensorNumber) {
 
 
 
-void goAnalog() {
-  int m1Encoder = readTicksWithInterrupt(true, 0.005);
-  int m2Encoder = readTicksWithInterrupt(false, 0.02);
-  Serial.println(readRpmWithInterrupt(true, 0.02));
-  Serial.println(readRpmWithInterrupt(false, 0.02));
+void goAnalog(int targetSpeed) {
+//  int m1Encoder = readTicksWithInterrupt(true, 0.005);
+//  int m2Encoder = readTicksWithInterrupt(false, 0.02);
+    encoderLPos = 0;
+    encoderRPos = 0;
+    delay(10);
+    int m1Encoder = encoderLPos;
+    int m2Encoder = encoderRPos;
+//  Serial.println(readRpmWithInterrupt(true, 0.02));
+//  Serial.println(readRpmWithInterrupt(false, 0.02));
   int output = computeAnalogPid(m1Encoder, m2Encoder);
-  md.setSpeeds(300 - output, 295 + output);
+  Serial.println(m1Encoder);
+  md.setSpeeds(targetSpeed + 8 - output, targetSpeed + output);
 }
 
 int computeAnalogPid(int leftTicks, int rightTicks) {
@@ -187,10 +192,6 @@ int computeAnalogPid(int leftTicks, int rightTicks) {
     pwm1 = output;
     return pwm1;
 }
-
-
-
-
 
 
 
