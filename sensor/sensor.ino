@@ -1,8 +1,8 @@
-#define FRONT_RIGHT A0
-#define FRONT_CENTER A1
-#define FRONT_LEFT A2
-#define LEFT A3
-#define RIGHT A4
+#define L1 A0
+#define F3 A1
+#define R2 A2
+#define R1 A3
+#define F1 A4
 #define BACK A5 
 #define READ_TIMES 7
 
@@ -27,7 +27,7 @@ void loop() {
   int sensorVal[READ_TIMES];
   int sortedSensorVal[READ_TIMES];
   for (int i = 0; i < READ_TIMES; i++) {
-    sensorVal[i] = analogRead(FRONT_LEFT);         
+    sensorVal[i] = analogRead(BACK);         
     delay(10);
   }
   sortedSensorVal[0] = sensorVal[0];

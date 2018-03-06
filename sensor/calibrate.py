@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import glob
 
 
-sensor_names = ['FRONT_LEFT', 'FRONT_RIGHT', 'LEFT', 'RIGHT', 'BACK']
+sensor_names = ['F1', 'R1', 'L1', 'F3', 'R2', 'BACK']
 binwidth = 30
 
 # used for 
@@ -22,7 +22,7 @@ def plot(csv_file):
 	# print(V)
 	R = float(csv_file[-6:-4])
 
-	x.append(1/V)
+	x.append(1/(V-3))
 	y.append(R)
 	plt.savefig(csv_file.replace(".csv", ".png"))
 	# plt.show()
