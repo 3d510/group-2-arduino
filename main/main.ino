@@ -1,6 +1,6 @@
 #include "DualVNH5019MotorShield.h"
 #include "PinChangeInt.h"
-#include <string>
+#include <string.h>
 
 #define L1 A0
 #define F3 A1
@@ -69,11 +69,11 @@ void loop() {
     if (command.length() > 1) {
       //fastest path
       for (int i = 0; i < command.length(); i++) {
-        readChar(command.at(i));
+        readChar(command[i]);
       }
     }
     else {
-      readChar(command.at(0));
+      readChar(command[0]);
     }
   }
 }
@@ -94,7 +94,7 @@ void forwardOneGrid() {
   goDigitalDist(60, 9.7, FORWARD);
 }
 
-void forwardOneGrid() {
+void backOneGrid() {
   goDigitalDist(60, 9.7, BACK_DIR);
 }
 
@@ -192,8 +192,8 @@ void readSensors() {
   double r2 = readSingleSensor(R2);
   double r1 = readSingleSensor(R1);
   double f1 = readSingleSensor(F1);
-  Serial.write(l1 + ";" + f3 + ";" + r2 + ";" + r1 + ";" + f1);
-}
+  Serial.print(String(l1) + ";" + String(f3) + ";" + String(r2) + ";" + String(r1) + ";" + String(f1));
+} 
 
 float readSingleSensor(int sensorNumber) {
   // read the pin 7 times to get median value
@@ -254,6 +254,7 @@ int partition(int arr[], int l, int r)
     }
     swap(&arr[i], &arr[r]);
     return i;
+}
 
 void swap(int* a, int* b) {
   int tmp = *a;
