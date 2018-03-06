@@ -13,6 +13,7 @@
 #define FORWARD 0
 #define ROTATE_CW 1
 #define ROTATE_CCW 2
+#define BACKWARD 3
 
 const int encoderRPinA = 11;
 const int encoderRPinB = 13;
@@ -85,6 +86,9 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
     RMag = -1;
   } else if (direction == ROTATE_CCW) {
     LMag = -1;
+  } else if (direction == BACKWARD) {
+    RMag = -1;
+    LMag = -1;
   }
   
   leftPrevTicks = encoderLPos;
@@ -112,11 +116,8 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
     rightPrevTicks = encoderRPos;
 
     if (sense) {
-
-    double d1 = readSingleSensor(R2);
-    double d2 = readSingleSensor(L1);
-    
-    if ((d1 <= 13.5 && d1 >= 10) || (d2 <= 13.5 && d2 >= 10)) break;
+      double d1 = readSingleSensor(R2);
+      double d2 = readSingleSensor(L1);
     }
     
     delay(iteration_time * 1000); // iteration_time in seconds
@@ -153,23 +154,6 @@ float readSingleSensor(int sensorNumber) {
     //Serial.println(sensorVal[i]);      
     //delay(10);
   }
-  
-//  sortedSensorVal[0] = sensorVal[0];
-//  for (int i = 1; i < READ_TIMES; i++) {
-//    int id = 0;
-//    while (id < i && sortedSensorVal[id] <= sensorVal[i])
-//      id++;
-//    if (id == i) {
-//      sortedSensorVal[i] = sensorVal[i];
-//    } else {
-//      for (int j = i - 1; j >= id; j--) {
-//        sortedSensorVal[j+1] = sensorVal[j]; 
-//      } 
-//      sortedSensorVal[id] = sensorVal[i]; 
-//    }
-//  }
-  
-//  int readValue = sortedSensorVal[READ_TIMES/2];
 
   int readValue = kthSmallest(sensorVal, 0 ,READ_TIMES-1, READ_TIMES/2);
 

@@ -10,7 +10,7 @@ int counter = 0;
 
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(9600);
 }
 
 void loop() {
@@ -27,7 +27,7 @@ void loop() {
   int sensorVal[READ_TIMES];
   int sortedSensorVal[READ_TIMES];
   for (int i = 0; i < READ_TIMES; i++) {
-    sensorVal[i] = analogRead(BACK);         
+    sensorVal[i] = analogRead(R1);         
     delay(10);
   }
   sortedSensorVal[0] = sensorVal[0];
