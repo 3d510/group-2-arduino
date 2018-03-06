@@ -1,5 +1,6 @@
 #include "DualVNH5019MotorShield.h"
 #include "PinChangeInt.h"
+#include <string>
 
 #define L1 A0
 #define F3 A1
@@ -13,6 +14,7 @@
 #define FORWARD 0
 #define ROTATE_CW 1
 #define ROTATE_CCW 2
+#define BACK_DIR 3
 
 const int encoderRPinA = 11;
 const int encoderRPinB = 13;
@@ -60,9 +62,49 @@ int counter = 0;
 int ticks[111];
 
 void loop() {
-   
+  String command;
+  if (Serial.available() > 0) {
+    command = Serial.readString();
+    Serial.flush();
+    if (command.length() > 1) {
+      //fastest path
+      for (int i = 0; i < command.length(); i++) {
+        readChar(command.at(i));
+      }
+    }
+    else {
+      readChar(command.at(0));
+    }
+  }
 }
 
+void readChar(char command) {
+  switch(command) {
+    case 'f': forwardOneGrid();
+              break;
+    case 'l': turnLeft();
+              break;
+    case 'r': turnRight();
+              break;
+    case 'b': backOneGrid();
+  }
+}
+
+void forwardOneGrid() {
+  goDigitalDist(60, 9.7, FORWARD);
+}
+
+void forwardOneGrid() {
+  goDigitalDist(60, 9.7, BACK_DIR);
+}
+
+void turnLeft() {
+  goDigitalDist(60, 2*PI*robot_radius * (1080 + 15)/360, ROTATE_CW);
+}
+
+void turnRight() {
+  goDigitalDist(60, 2*PI*robot_radius * (1080 + 15)/360, ROTATE_CCW);
+}
 
 void doEncoderLeft() {
   encoderLPos++;
@@ -77,13 +119,18 @@ void doEncoderRight() {
 double errorPrior = 0, integral = 0;
 int leftPrevTicks = 0, rightPrevTicks = 0;
 
-void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {  
+void goDigitalDist(double desired_rpm, float dist, int direction) {  
   int leftSpeed = 0, rightSpeed = 0;
   int LMag = 1, RMag = 1;
 
-  if (direction == ROTATE_CW) {
+  if (direction == BACK_DIR) {
+    LMag = -1;
     RMag = -1;
-  } else if (direction == ROTATE_CCW) {
+  }
+  else if (direction == ROTATE_CW) {
+    RMag = -1;
+  } 
+  else if (direction == ROTATE_CCW) {
     LMag = -1;
   }
   
@@ -111,13 +158,7 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
     leftPrevTicks = encoderLPos;
     rightPrevTicks = encoderRPos;
 
-    if (sense) {
-
-    double d1 = readSingleSensor(R2);
-    double d2 = readSingleSensor(L1);
-    
-    if ((d1 <= 13.5 && d1 >= 10) || (d2 <= 13.5 && d2 >= 10)) break;
-    }
+    readSensors();
     
     delay(iteration_time * 1000); // iteration_time in seconds
   }
@@ -143,6 +184,16 @@ double ticksToRpm(int tickCount, double period) { // period in seconds
 }
 
 //------------Sensor--------------//
+
+
+void readSensors() {
+  double l1 = readSingleSensor(L1);
+  double f3 = readSingleSensor(F3);
+  double r2 = readSingleSensor(R2);
+  double r1 = readSingleSensor(R1);
+  double f1 = readSingleSensor(F1);
+  Serial.write(l1 + ";" + f3 + ";" + r2 + ";" + r1 + ";" + f1);
+}
 
 float readSingleSensor(int sensorNumber) {
   // read the pin 7 times to get median value
@@ -243,7 +294,3 @@ int kthSmallest(int arr[], int l, int r, int k)
     // elements in array
     return 1000;
 }
-
-
-
-
