@@ -1,6 +1,5 @@
 #include "DualVNH5019MotorShield.h"
 #include "PinChangeInt.h"
-#include <PID_v1.h>
 
 #define L1 A0
 #define F3 A1
@@ -61,149 +60,10 @@ int counter = 0;
 int ticks[111];
 
 void loop() {
-  if (!done) {  
-//    while(1) {
-//      Serial.println(readSingleSensor(L1));
-//      delay(3000);
-//    }
-    int count = 0;
-    while (1) {
-      //if (count == 7) break;
-      
-      goDigitalDist(50, 150, FORWARD, true);
-      delay(1000);
-
-       goDigitalDist(40, 2*PI*robot_radius * 45/360, ROTATE_CW, false); 
-      delay(1000);
-
-      goDigitalDist(40, 50, FORWARD, false);
-      delay(1000);
-
-      goDigitalDist(40, 2*PI*robot_radius * 105/360, ROTATE_CCW, false); 
-      delay(1000);
-
-      goDigitalDist(40, 50, FORWARD, false);
-      delay(1000);
-
-      goDigitalDist(40, 2*PI*robot_radius * 45/360, ROTATE_CW, false); 
-      delay(1000);
-      
-      goDigitalDist(40, 20, FORWARD, true);
-
-      break;
-      
-
-      
-//     
-//      int Time = millis();
-//      
-//      double d1 = readSingleSensor(R2);
-//      double d2 = readSingleSensor(L1);
-//
-//      Serial.println(millis() - Time);
-//      break;
-     
-
-//      Serial.print(d1);
-//      Serial.print(" ");
-//      Serial.println(d2);
-
-      //if ((d1 <= 15 && d1 >= 10) || (d2 <= 15 && d2 >= 10)) break;
-      
-    }
-    md.setSpeeds(0,0);
-    
-    //delay(5000);
-    // goDigital(60, 7, FORWARD);
-    //goDigitalDist(40, 2*PI*robot_radius * (1080 + 15)/360, ROTATE_CW);
-
-    // goDigitalDist(40, 150, FORWARD);
-    
-    //delay(3000);
-    //goDigital(40, 5, FORWARD);
-    //calTimeForward(40, 30)
-
-//      md.setSpeeds(300, 0);
-//
-//      while(1) {
-//        float Time = millis();
-//        if (Time > 10000) break;
-//        encoderLPos = 0;
-//        delay(5);
-//        Serial.println(ticksToRpm(encoderLPos, 0.005));
-//      }
-      
-//    md.setSpeeds(300, 295);
-//    delay(100);
-//    
-//    while (counter < 100) {
-//      encoderLPos = 0;
-//      delay(5);
-//      ticks[counter] = encoderLPos;
-//      counter++;
-//    }
-//
-//    for (int i = 0; i < 100; i++) {
-//      Serial.println(ticksToRpm(ticks[i], 0.005));
-//    }
-    
-//    delay(3000);
-//    
-//    leftTickCount[0] = encoderLPos;
-//    rightTickCount[0] = encoderRPos;
-//    
-//    md.setSpeeds(400, 400);
-//    
-//    while (count < 100) {
-//      //rpms[count] = abs(readRpmWithInterrupt(false, 0.02));
-//      leftTickCount[count] = encoderLPos;
-//      rightTickCount[count] = encoderRPos;
-//      encoderLPos = 0;
-//      encoderRPos = 0;
-//      delay(5);
-//      count++;
-//    }
-//    
-//    for (int i = 0; i < count; i++) {
-//      Serial.print(i);
-//      Serial.print(" "); 
-//      Serial.print(leftTickCount[i]);
-//      Serial.print(" "); 
-//      Serial.println(rightTickCount[i]);
-//    }
-    done = true;
-//    goAnalog();
-//    if (millis() >= 2000) done = true;
-  } else {
-    md.setSpeeds(0,0);
-  }
+   
 }
 
-float readRpmWithInterrupt(bool isLeftWheel, float delayTime) { // delayTime in seconds
-  if (isLeftWheel) {
-    encoderLPos = 0;
-    delay(delayTime * 1000);
-    float rpm = 60 / (562.25 / ((encoderLPos - 1) / delayTime));
-    return rpm;
-  } else {
-    encoderRPos = 0;
-    delay(delayTime * 1000);
-    float rpm = 60 / (562.25 / ((encoderRPos - 1) / delayTime));
-    return rpm;
-  }
-}
 
-int readTicksWithInterrupt(bool isLeftWheel, float delayTime) { // delayTime in seconds
-  if (isLeftWheel) {
-    encoderLPos = 0;
-    delay(delayTime * 1000);
-    return encoderLPos;
-  } else {
-    encoderRPos = 0;
-    delay(delayTime * 1000);
-    return encoderRPos;
-  }
-}
 void doEncoderLeft() {
   encoderLPos++;
 }
@@ -216,43 +76,6 @@ void doEncoderRight() {
 
 double errorPrior = 0, integral = 0;
 int leftPrevTicks = 0, rightPrevTicks = 0;
-
-void goDigital(double desired_rpm, float time, int direction) {  
-  int leftSpeed = 0, rightSpeed = 0;
-  int LMag = 1, RMag = 1;
-
-  if (direction == ROTATE_CW) {
-    RMag = -1;
-  } else if (direction == ROTATE_CCW) {
-    LMag = -1;
-  }
-  
-  leftPrevTicks = encoderLPos;
-  rightPrevTicks = encoderRPos;
-
-  delay(iteration_time * 1000);
-
-  float start_time = millis();
-  
-  while(1) {
-    float Time = millis();
-    if (Time > start_time + 1000 * time) break;
-    
-    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 7.8, 4.75, 0.08);
-    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.75, 4.5, 0.005);
-
-    double newLeftSpeed = constrain(abs(leftSpeed) + leftDigitalPidOutput, 0 , 400) * LMag;
-    double newRightSpeed = constrain(abs(rightSpeed) + rightDigitalPidOutput, 0 , 400) * RMag;
-    md.setSpeeds(newLeftSpeed, newRightSpeed);
-    //md.setSpeeds(newLeftSpeed, 0);
-    //md.setSpeeds(0, newRightSpeed);
-
-    leftPrevTicks = encoderLPos;
-    rightPrevTicks = encoderRPos;
-    delay(iteration_time * 1000); // iteration_time in seconds
-  }
-  md.setSpeeds(0,0);
-}
 
 void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {  
   int leftSpeed = 0, rightSpeed = 0;
@@ -319,15 +142,6 @@ double ticksToRpm(int tickCount, double period) { // period in seconds
   return 60 / (562.25 / ((tickCount) / period));
 }
 
-double calTimeForward(double rpm, double distance) { // distance in cm
-  return (distance - 9.7) / (2 * PI * wheel_radius * rpm / 60) + 0.667;
-}
-
-double calTimeRotate(double rpm, double angle) { // angle in degree
-
-  return (2 * PI * robot_radius * angle / 360 - 9.7) / (2 * PI * wheel_radius * rpm / 60) + 0.667;
-}
-
 //------------Sensor--------------//
 
 float readSingleSensor(int sensorNumber) {
@@ -389,7 +203,6 @@ int partition(int arr[], int l, int r)
     }
     swap(&arr[i], &arr[r]);
     return i;
-}
 
 void swap(int* a, int* b) {
   int tmp = *a;
@@ -430,10 +243,6 @@ int kthSmallest(int arr[], int l, int r, int k)
     // elements in array
     return 1000;
 }
-
-
-
-
 
 
 
