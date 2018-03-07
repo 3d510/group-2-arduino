@@ -1,5 +1,6 @@
 #include "DualVNH5019MotorShield.h"
 #include "PinChangeInt.h"
+#include <string.h>
 
 #define L1 A0
 #define F3 A1
@@ -61,9 +62,49 @@ int counter = 0;
 int ticks[111];
 
 void loop() {
-   
+  String command;
+  if (Serial.available() > 0) {
+    command = Serial.readString();
+    Serial.flush();
+    if (command.length() > 1) {
+      //fastest path
+      for (int i = 0; i < command.length(); i++) {
+        readChar(command[i]);
+      }
+    }
+    else {
+      readChar(command[0]);
+    }
+  }
 }
 
+void readChar(char command) {
+  switch(command) {
+    case 'f': forwardOneGrid();
+              break;
+    case 'l': turnLeft();
+              break;
+    case 'r': turnRight();
+              break;
+    case 'b': backOneGrid();
+  }
+}
+
+void forwardOneGrid() {
+  goDigitalDist(60, 9.7, FORWARD, false);
+}
+
+void backOneGrid() {
+  goDigitalDist(60, 9.7, BACKWARD, false);
+}
+
+void turnLeft() {
+  goDigitalDist(60, 2*PI*robot_radius * (1080 + 15)/360, ROTATE_CW, false);
+}
+
+void turnRight() {
+  goDigitalDist(60, 2*PI*robot_radius * (1080 + 15)/360, ROTATE_CCW, false);
+}
 
 void doEncoderLeft() {
   encoderLPos++;
@@ -84,7 +125,8 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
 
   if (direction == ROTATE_CW) {
     RMag = -1;
-  } else if (direction == ROTATE_CCW) {
+  } 
+  else if (direction == ROTATE_CCW) {
     LMag = -1;
   } else if (direction == BACKWARD) {
     RMag = -1;
@@ -115,10 +157,14 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
     leftPrevTicks = encoderLPos;
     rightPrevTicks = encoderRPos;
 
-    if (sense) {
-      double d1 = readSingleSensor(R2);
-      double d2 = readSingleSensor(L1);
+  if (sense) {
+
+    double d1 = readSingleSensor(R2);
+    double d2 = readSingleSensor(L1);
+    
+    if ((d1 <= 13.5 && d1 >= 10) || (d2 <= 13.5 && d2 >= 10)) break;
     }
+    readSensors();
     
     delay(iteration_time * 1000); // iteration_time in seconds
   }
@@ -144,6 +190,16 @@ double ticksToRpm(int tickCount, double period) { // period in seconds
 }
 
 //------------Sensor--------------//
+
+
+void readSensors() {
+  double l1 = readSingleSensor(L1);
+  double f3 = readSingleSensor(F3);
+  double r2 = readSingleSensor(R2);
+  double r1 = readSingleSensor(R1);
+  double f1 = readSingleSensor(F1);
+  Serial.print(String(l1) + ";" + String(f3) + ";" + String(r2) + ";" + String(r1) + ";" + String(f1));
+} 
 
 float readSingleSensor(int sensorNumber) {
   // read the pin 7 times to get median value
@@ -187,6 +243,7 @@ int partition(int arr[], int l, int r)
     }
     swap(&arr[i], &arr[r]);
     return i;
+}
 
 void swap(int* a, int* b) {
   int tmp = *a;
@@ -227,7 +284,3 @@ int kthSmallest(int arr[], int l, int r, int k)
     // elements in array
     return 1000;
 }
-
-
-
-
