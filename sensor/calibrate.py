@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 import glob
 
 
-sensor_names = ['F1', 'R1', 'L1', 'F3', 'R2', 'BACK']
+#sensor_names = ['F1', 'R1', 'L1', 'F3', 'R2', 'BACK']
+sensor_names = ['R2']
 binwidth = 30
 
 # used for 

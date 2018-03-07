@@ -27,7 +27,7 @@ void loop() {
   int sensorVal[READ_TIMES];
   int sortedSensorVal[READ_TIMES];
   for (int i = 0; i < READ_TIMES; i++) {
-    sensorVal[i] = analogRead(R1);         
+    sensorVal[i] = analogRead(R2);         
     delay(10);
   }
   sortedSensorVal[0] = sensorVal[0];
