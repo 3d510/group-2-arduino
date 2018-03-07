@@ -67,12 +67,6 @@ void loop() {
     command = Serial.readString();
     Serial.flush();
     if (command.length() > 1) {
-      // shortest path
-      
-//      for (int i = 0; i < command.length(); i++) {
-//        readChar(command[i]);
-//      }
-
       shortestPath(command);
     }
     else {
@@ -89,7 +83,7 @@ void readChar(char command) {
               break;
     case 'r': turnRight(90);
               break;
-    case 'b': back(1); break;
+    case 'b': backward(1); break;
     case 's': readSensors(); break;
       
   }
@@ -122,7 +116,7 @@ void shortestPath(String instruction) {
 
 double getOffset(int noGrid) {
   double offset;
-  switch noGrid {
+  switch (noGrid) {
     case 1: offset = -0.3; break;
     default: offset = -0.3; break;
   }
@@ -135,7 +129,7 @@ void forward(int noGrid) {
   readSensors();
 }
 
-void back(int noGrid) {
+void backward(int noGrid) {
   double offset = getOffset(noGrid);
   goDigitalDist(60, 9.7, BACKWARD, false);
   readSensors();
@@ -205,6 +199,7 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
     if (sense) {  
       double d1 = readSingleSensor(R2);
       double d2 = readSingleSensor(L1);
+      
       if ((d1 <= 13.5 && d1 >= 10) || (d2 <= 13.5 && d2 >= 10)) break;
     }
     
@@ -240,15 +235,11 @@ void readSensors() {
   double r2 = readSingleSensor(R2);
   double r1 = readSingleSensor(R1);
   double f1 = readSingleSensor(F1);
-  String s = stringify(l1) + ";" + stringify(f3) + ";" + stringify(r2) + ";" + stringify(r1) + ";" + stringify(f1);
+  double back = readSingleSensor(BACK);
+  String s = stringify(l1) + ";" + stringify(back) + ";" + stringify(r2) + ";" + stringify(f3) + ";" + stringify(r1) + ";" + stringify(f1);
   //writeString(s);
   Serial.println(s);
 } 
-
-void writeString(String s) {
-  for (int i = 0; i < s.length(); i++)
-    Serial.write(s[i]);
-}
 
 String stringify(double value) {
   return String((int)(value/10 - 0.5));
