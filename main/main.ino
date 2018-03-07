@@ -10,7 +10,7 @@
 #define BACK A5 
 
 #define TEST_TIME 0.002
-#define READ_TIMES 11
+#define READ_TIMES 17
 #define FORWARD 0
 #define ROTATE_CW 1
 #define ROTATE_CCW 2
@@ -45,7 +45,7 @@ void setup() {
   pinMode (encoderRPinA, INPUT);
   pinMode (encoderRPinB, INPUT);
   
-  Serial.begin (9600);
+  Serial.begin(9600);
   PCintPort::attachInterrupt(encoderLPinA, &doEncoderLeft, RISING);
   PCintPort::attachInterrupt(encoderRPinA, &doEncoderRight, RISING);
   md.init();
@@ -67,10 +67,13 @@ void loop() {
     command = Serial.readString();
     Serial.flush();
     if (command.length() > 1) {
-      //fastest path
-      for (int i = 0; i < command.length(); i++) {
-        readChar(command[i]);
-      }
+      // shortest path
+      
+//      for (int i = 0; i < command.length(); i++) {
+//        readChar(command[i]);
+//      }
+
+      shortestPath(command);
     }
     else {
       readChar(command[0]);
@@ -80,30 +83,72 @@ void loop() {
 
 void readChar(char command) {
   switch(command) {
-    case 'f': forwardOneGrid();
+    case 'f': forward(1);
               break;
-    case 'l': turnLeft();
+    case 'l': turnLeft(90);
               break;
-    case 'r': turnRight();
+    case 'r': turnRight(90);
               break;
-    case 'b': backOneGrid();
+    case 'b': back(1); break;
+    case 's': readSensors(); break;
+      
   }
 }
 
-void forwardOneGrid() {
-  goDigitalDist(60, 9.7, FORWARD, false);
+void shortestPath(String instruction) {
+  int curCount = 0, curId = 0;
+  char curChar = instruction[0];
+  while (curId < instruction.length()) {
+    curChar = instruction[curId];
+    while (curId + curCount < instruction.length() && instruction[curId + curCount] == curChar) 
+      curCount++;
+
+    switch (curChar) {
+      case 'f': 
+        forward(curCount); break;
+      case 'b':
+        backward(curCount); break;
+      case 'l':
+        turnLeft(90 * curCount); break;
+      case 'r':
+        turnRight(90 * curCount); break;      
+    }
+    
+    curId += curCount;
+    curCount = 0;
+  }
+  
 }
 
-void backOneGrid() {
+double getOffset(int noGrid) {
+  double offset;
+  switch noGrid {
+    case 1: offset = -0.3; break;
+    default: offset = -0.3; break;
+  }
+  return offset;
+}
+
+void forward(int noGrid) {
+  double offset = getOffset(noGrid);
+  goDigitalDist(60, noGrid * 10 + offset, FORWARD, false);
+  readSensors();
+}
+
+void back(int noGrid) {
+  double offset = getOffset(noGrid);
   goDigitalDist(60, 9.7, BACKWARD, false);
+  readSensors();
 }
 
-void turnLeft() {
-  goDigitalDist(60, 2*PI*robot_radius * (1080 + 15)/360, ROTATE_CW, false);
+void turnLeft(double angle) {
+  goDigitalDist(60, 2*PI*robot_radius * angle/360, ROTATE_CCW, false);
+  readSensors();
 }
 
-void turnRight() {
-  goDigitalDist(60, 2*PI*robot_radius * (1080 + 15)/360, ROTATE_CCW, false);
+void turnRight(double angle) {
+  goDigitalDist(60, 2*PI*robot_radius * angle/360, ROTATE_CW, false);
+  readSensors();
 }
 
 void doEncoderLeft() {
@@ -157,14 +202,11 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
     leftPrevTicks = encoderLPos;
     rightPrevTicks = encoderRPos;
 
-  if (sense) {
-
-    double d1 = readSingleSensor(R2);
-    double d2 = readSingleSensor(L1);
-    
-    if ((d1 <= 13.5 && d1 >= 10) || (d2 <= 13.5 && d2 >= 10)) break;
+    if (sense) {  
+      double d1 = readSingleSensor(R2);
+      double d2 = readSingleSensor(L1);
+      if ((d1 <= 13.5 && d1 >= 10) || (d2 <= 13.5 && d2 >= 10)) break;
     }
-    readSensors();
     
     delay(iteration_time * 1000); // iteration_time in seconds
   }
@@ -175,7 +217,7 @@ int id = 1;
 double computeDigitalPid(double desired_value, double actual_value, double kp, double ki, double kd) {
   //Serial.print(millis());
   //Serial.print(" ");
-  Serial.println(actual_value);
+  //Serial.println(actual_value);
   double error = desired_value - actual_value;
   integral += (error * iteration_time);
   double derivative = (error - errorPrior)/iteration_time;
@@ -198,8 +240,19 @@ void readSensors() {
   double r2 = readSingleSensor(R2);
   double r1 = readSingleSensor(R1);
   double f1 = readSingleSensor(F1);
-  Serial.print(String(l1) + ";" + String(f3) + ";" + String(r2) + ";" + String(r1) + ";" + String(f1));
+  String s = stringify(l1) + ";" + stringify(f3) + ";" + stringify(r2) + ";" + stringify(r1) + ";" + stringify(f1);
+  //writeString(s);
+  Serial.println(s);
 } 
+
+void writeString(String s) {
+  for (int i = 0; i < s.length(); i++)
+    Serial.write(s[i]);
+}
+
+String stringify(double value) {
+  return String((int)(value/10 - 0.5));
+}
 
 float readSingleSensor(int sensorNumber) {
   // read the pin 7 times to get median value
@@ -212,6 +265,8 @@ float readSingleSensor(int sensorNumber) {
   }
 
   int readValue = kthSmallest(sensorVal, 0 ,READ_TIMES-1, READ_TIMES/2);
+
+  if (readValue <= 3) return 0;
 
   // deduce distance from value read from analog pin
   switch (sensorNumber) {
@@ -226,7 +281,7 @@ float readSingleSensor(int sensorNumber) {
     case BACK:
       return 6142.70/(readValue - 3) - 3.088;
     case R2:
-      return 6725.72 / (readValue - 3) - 4.077;
+      return 6189.064 / (readValue - 3) - 2.054;
 //      case R2:
 //        return 6787 / (readValue - 3) - 4;
   }
