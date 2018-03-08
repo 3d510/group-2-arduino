@@ -23,6 +23,8 @@ const int encoderLPinB = 5;
 const double iteration_time = 0.02;
 const double wheel_radius = 3; // cm
 const double robot_radius = 9.5; // cm
+const double distBetweenSensors = 0.5;
+const double adjustEpsilon = 0.5;
 
 volatile int encoderRPos = 0;
 int encoderRPinALast = LOW;
@@ -95,6 +97,18 @@ void readChar(char command) {
               break;
     case 'a': readSensors(false);
               break;
+  }
+}
+
+void adjust() {
+  double sensorDifference = readSingleSensor(L1) - readSingleSensor(R2);
+  //check dist between sensors
+  if (abs(sensorDifference) < adjustEpsilon) return;
+  if (sensorDifference > 0) {
+    turnRight(atan2((sensorDifference), distBetweenSensors));
+  }
+  else {
+    turnLeft(atan2((-1 * sensorDifference), distBetweenSensors));
   }
 }
 
@@ -171,11 +185,13 @@ void doEncoderRight() {
 double errorPrior = 0, integral = 0;
 int leftPrevTicks = 0, rightPrevTicks = 0;
 
-void rampUp(double desired_rpm) {
+int rampUp(double desired_rpm) {
+  leftPrevTicks = encoderLPos;
   for (int i = 10; i < desired_rpm; i += 10) {
     md.setSpeeds(i, i);
     delay(1);
   }
+  return encoderLPos - leftPrevTicks;
 }
 
 void rampDown(double desired_rpm) {
@@ -187,7 +203,7 @@ void rampDown(double desired_rpm) {
 }
 
 void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {  
-  rampUp();
+  int rampUpTicks = rampUp(desired_rpm);
   int leftSpeed = 0, rightSpeed = 0;
   int LMag = 1, RMag = 1;
 
@@ -211,7 +227,7 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
   int start_ticks = encoderLPos;
   
   while(1) {
-    if (encoderLPos >= start_ticks + totalTicks) break;
+    if (encoderLPos >= start_ticks + totalTicks - rampUpTicks) break;
 
     //1 grid
 //    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 7.5, 6.0, 0);
@@ -248,8 +264,8 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
   integral = 0;
   errorPrior = 0;
   //100, 300 for lab2 lounge 100,250
-  //md.setBrakes(100, 200);
-  rampDown();
+  md.setBrakes(100, 200);
+  //rampDown();
 }
 
 int id = 1;
