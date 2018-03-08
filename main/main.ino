@@ -83,9 +83,14 @@ void readChar(char command) {
               break;
     case 'r': turnRight(90);
               break;
-    case 'b': backward(1); break;
-    case 's': readSensors(); break;
-      
+    case 'b': backward(1);
+              break;
+    case 's': readSensors(true); 
+              break;
+    case 'a': readSensors(false);
+              break;
+    default:  readSensors(false);
+	      break;
   }
 }
 
@@ -105,7 +110,12 @@ void shortestPath(String instruction) {
       case 'l':
         turnLeft(90 * curCount); break;
       case 'r':
-        turnRight(90 * curCount); break;      
+        turnRight(90 * curCount); break;
+      case 's':
+        readSensors(true); break;
+      default:
+        readSensors(false); break;
+
     }
     
     curId += curCount;
@@ -126,23 +136,23 @@ double getOffset(int noGrid) {
 void forward(int noGrid) {
   double offset = getOffset(noGrid);
   goDigitalDist(60, noGrid * 10 + offset, FORWARD, false);
-  readSensors();
+  readSensors(true);
 }
 
 void backward(int noGrid) {
   double offset = getOffset(noGrid);
   goDigitalDist(60, 9.7, BACKWARD, false);
-  readSensors();
+  readSensors(true);
 }
 
 void turnLeft(double angle) {
   goDigitalDist(60, 2*PI*robot_radius * angle/360, ROTATE_CCW, false);
-  readSensors();
+  readSensors(true);
 }
 
 void turnRight(double angle) {
   goDigitalDist(60, 2*PI*robot_radius * angle/360, ROTATE_CW, false);
-  readSensors();
+  readSensors(true);
 }
 
 void doEncoderLeft() {
@@ -229,20 +239,26 @@ double ticksToRpm(int tickCount, double period) { // period in seconds
 //------------Sensor--------------//
 
 
-void readSensors() {
+void readSensors(bool returnGrid) {
   double l1 = readSingleSensor(L1);
   double f3 = readSingleSensor(F3);
   double r2 = readSingleSensor(R2);
   double r1 = readSingleSensor(R1);
   double f1 = readSingleSensor(F1);
   double back = readSingleSensor(BACK);
-  String s = stringify(l1) + ";" + stringify(back) + ";" + stringify(r2) + ";" + stringify(f3) + ";" + stringify(r1) + ";" + stringify(f1);
+  String s;
+  if (returnGrid) s = stringifyGrid(l1) + ";" + stringifyGrid(back) + ";" + stringifyGrid(r2) + ";" + stringifyGrid(f3) + ";" + stringifyGrid(r1) + ";" + stringifyGrid(f1);
+  else s = stringify(l1) + ";" + stringify(back) + ";" + stringify(r2) + ";" + stringify(f3) + ";" + stringify(r1) + ";" + stringify(f1);
   //writeString(s);
   Serial.println(s);
 } 
 
 String stringify(double value) {
-  return String((int)(value/10 - 0.5));
+  return String(value);
+}
+
+String stringifyGrid(double value) {
+  return String((int)(value/10 + 0.5));
 }
 
 float readSingleSensor(int sensorNumber) {
