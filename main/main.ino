@@ -66,14 +66,16 @@ void loop() {
   if (Serial.available() > 0) {
     command = Serial.readString();
     Serial.flush();
-    if (command.length() > 1) {
-      shortestPath(command);
-    }
-    else {
-      readChar(command[0]);
-    }
+//    if (command.length() > 1) {
+//      shortestPath(command);
+//    }
+//    else {
+//      readChar(command[0]);
+//    }
+    convertCommand(command);
   }
 }
+
 
 void readChar(char command) {
   switch(command) {
@@ -89,7 +91,7 @@ void readChar(char command) {
   }
 }
 
-void shortestPath(String instruction) {
+void readCommand(String instruction) {
   int curCount = 0, curId = 0;
   char curChar = instruction[0];
   while (curId < instruction.length()) {
@@ -105,7 +107,9 @@ void shortestPath(String instruction) {
       case 'l':
         turnLeft(90 * curCount); break;
       case 'r':
-        turnRight(90 * curCount); break;      
+        turnRight(90 * curCount); break;  
+      case 's': 
+        readSensors(); break;    
     }
     
     curId += curCount;
@@ -157,6 +161,7 @@ void doEncoderRight() {
 
 double errorPrior = 0, integral = 0;
 int leftPrevTicks = 0, rightPrevTicks = 0;
+double kpl, kil, kdl, kpr, kir, kdr;
 
 void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {  
   int leftSpeed = 0, rightSpeed = 0;
@@ -184,8 +189,8 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
   while(1) {
     if (encoderLPos >= start_ticks + totalTicks) break;
     
-    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 7.8, 4.75, 0.08);
-    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.75, 4.5, 0);
+    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), kpl, kil, kdl);
+    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), kpr, kir, kdr);
 
     double newLeftSpeed = constrain(abs(leftSpeed) + leftDigitalPidOutput, 0 , 400) * LMag;
     double newRightSpeed = constrain(abs(rightSpeed) + rightDigitalPidOutput, 0 , 400) * RMag;
@@ -330,3 +335,42 @@ int kthSmallest(int arr[], int l, int r, int k)
     // elements in array
     return 1000;
 }
+
+//---------------Testing----------------//
+
+
+//ffff;p;k;k;k;k;k;k
+//fffff:n:100:300
+
+void convertCommand(String command) {
+  String curString, split[11];
+  int curIndex = 0, splitId = 0;
+  while (curIndex < command.length()) {
+    curString = "";
+    int index = curIndex;
+    while (index < command.length() && command[index] != ';') {
+      curString += command[index];
+      index++;
+    }
+    split[splitId] = curString;
+    splitId++;
+    curIndex = index + 1;
+    curString = "";
+  }
+
+  if (split[1] == "p") {
+    kpl = split[2].toFloat(); 
+    kil = split[3].toFloat();
+    kdl = split[4].toFloat();
+    kpr = split[5].toFloat();
+    kir = split[6].toFloat();
+    kdr = split[7].toFloat();
+    readCommand(split[0]);
+    
+  } else if (split[1] == "n") {
+    md.setSpeeds(split[2].toFloat(), split[3].toFloat());
+  }
+}
+
+
+
