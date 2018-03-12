@@ -2,6 +2,8 @@
 #include "PinChangeInt.h"
 #include <string.h>
 
+//with small battery, kp left = 13, kp right = 20
+//with big battery, 17;1.5;0;20;2;0;26;26;10;100;250 can go 10 squares
 #define L1 A0
 #define F3 A1
 #define R2 A2
@@ -20,10 +22,10 @@ const int encoderRPinA = 11;
 const int encoderRPinB = 13;
 const int encoderLPinA = 3;
 const int encoderLPinB = 5;
-const double iteration_time = 0.02;
+const double iteration_time = 0.01;
 const double wheel_radius = 3; // cm
 const double robot_radius = 9.5; // cm
-const double distBetweenSensors = 0.5;
+const double distBetweenSensors = 13.5;
 const double adjustEpsilon = 0.5;
 
 volatile int encoderRPos = 0;
@@ -67,17 +69,15 @@ void loop() {
   if (Serial.available() > 0) {
     command = Serial.readString();
     Serial.flush();
-//    if (command.length() > 1) {
-//      shortestPath(command);
-//    }
-//    else {
-//      readChar(command[0]);
-//    }
     convertCommand(command);
   }
   
 //  if (!done) {
-//    goDigitalDist(40, 50, FORWARD, false);
+//    int prevLeft = encoderLPos, prevRight;
+//    md.setSpeeds(310, 300);
+//    delay(1000);
+//    Serial.println(ticksToRpm(encoderRPos - prevRight, 1));
+//    
 //    done = true;
 //  } else {
 //    md.setSpeeds(0,0);
@@ -97,22 +97,11 @@ void readChar(char command) {
               break;
     case 's': readSensors(true); 
               break;
-    case 'a': readSensors(false);
+    case 'a': adjust();
               break;
   }
 }
 
-void adjust() {
-  double sensorDifference = readSingleSensor(L1) - readSingleSensor(R2);
-  //check dist between sensors
-  if (abs(sensorDifference) < adjustEpsilon) return;
-  if (sensorDifference > 0) {
-    turnRight(atan2((sensorDifference), distBetweenSensors));
-  }
-  else {
-    turnLeft(atan2((-1 * sensorDifference), distBetweenSensors));
-  }
-}
 
 void readCommand(String instruction) {
   int curCount = 0, curId = 0;
@@ -134,7 +123,8 @@ void readCommand(String instruction) {
       case 's':
         readSensors(true); break;
       case 'a':
-        readSensors(false); break;
+        for (int i = 0; i < curCount; i++)
+        adjust(); break;
     }
     
     curId += curCount;
@@ -143,10 +133,41 @@ void readCommand(String instruction) {
   
 }
 
+void adjust() {  
+  double left = readSingleSensor(L1, 99);
+  double right = readSingleSensor(R2, 99);
+
+  if (left < 0 || right < 0) return;
+  
+  double sensorDifference = left - right;
+  Serial.println(left);
+  Serial.println(right);
+  //check dist between sensors
+  int degreesToTurn = atan2(abs(sensorDifference), distBetweenSensors) / PI * 180;
+  Serial.println(degreesToTurn);
+  Serial.println(sensorDifference);
+  if (abs(sensorDifference) < adjustEpsilon) return;
+  if (sensorDifference > 0) {
+    turnRight(degreesToTurn);
+  }
+  else {
+    turnLeft(degreesToTurn);
+  }
+//  while (abs(sensorDifference) > adjustEpsilon) {
+//    if (sensorDifference > 0) {
+//      turnRight(1);
+//    }
+//    else {
+//      turnLeft(1);
+//    }
+//  }
+}
+
+
 double getOffset(int noGrid) {
   double offset;
   switch (noGrid) {
-    case 1: offset = -0.3; break;
+    case 1: offset = 0; break;
     default: offset = -0.3; break;
   }
   return offset;
@@ -154,13 +175,13 @@ double getOffset(int noGrid) {
 
 void forward(int noGrid) {
   double offset = getOffset(noGrid);
-  goDigitalDist(90, noGrid * 10 + offset, FORWARD, false);
+  goDigitalDist(70, noGrid * 10 + offset, FORWARD, false);
   readSensors(true);
 }
 
 void backward(int noGrid) {
   double offset = getOffset(noGrid);
-  goDigitalDist(60, noGrid * 10 + offset, BACKWARD, false);
+  goDigitalDist(70, noGrid * 10 + offset, BACKWARD, false);
   readSensors(true);
 }
 
@@ -186,14 +207,66 @@ void doEncoderRight() {
 
 double errorPrior = 0, integral = 0;
 int leftPrevTicks = 0, rightPrevTicks = 0;
-double kpl, kil, kdl, kpr, kir, kdr;
+double kpl = 7.0, kil = 0, kdl = 0, kpr = 6.44, kir = 0, kdr = 0;
+int leftRampupOffset, rightRampupOffset, rampUpDelay, leftBreak, rightBreak;
+
+
+//---------------Testing----------------//
+
+
+//ffff;p;k;k;k;k;k;k
+//fffff:n:100:300
+
+void convertCommand(String command) {
+  String curString, split[15];
+  int curIndex = 0, splitId = 0;
+  while (curIndex < command.length()) {
+    curString = "";
+    int index = curIndex;
+    while (index < command.length() && command[index] != ';') {
+      curString += command[index];
+      index++;
+    }
+    split[splitId] = curString;
+    splitId++;
+    curIndex = index + 1;
+    curString = "";
+  }
+
+  if (split[1] == "p") {
+    kpl = split[2].toFloat(); 
+    kil = split[3].toFloat();
+    kdl = split[4].toFloat();
+    kpr = split[5].toFloat();
+    kir = split[6].toFloat();
+    kdr = split[7].toFloat();
+    leftRampupOffset = split[8].toFloat();
+    rightRampupOffset = split[9].toFloat();
+    rampUpDelay = split[10].toFloat();
+    leftBreak = split[11].toFloat();
+    rightBreak = split[12].toFloat();
+    
+    readCommand(split[0]);
+    
+  } else if (split[1] == "n") {
+    md.setSpeeds(split[2].toFloat(), split[3].toFloat());
+  }
+}
 
 int rampUp(double desired_rpm) {
   leftPrevTicks = encoderLPos;
-  for (int i = 10; i < desired_rpm; i += 10) {
-    md.setSpeeds(i, i);
-    delay(1);
+  int speedL = 0;
+  int prev = encoderLPos;
+  while (ticksToRpm(encoderLPos - prev, 0.005) < desired_rpm) {
+    delay(5);
+    speedL += 10;
+    md.setSpeeds(speedL + 5, speedL);
+    prev = encoderLPos;
   }
+//  for (int i = 10; i < desired_rpm; i += 10) {
+//    md.setSpeeds(i+6, i);
+//    delay(5);
+//  }
   return encoderLPos - leftPrevTicks;
 }
 
@@ -205,9 +278,9 @@ void rampDown(double desired_rpm) {
   md.setSpeeds(0, 0);
 }
 
+
 void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {  
-  int rampUpTicks = rampUp(desired_rpm);
-  int leftSpeed = 0, rightSpeed = 0;
+  
   int LMag = 1, RMag = 1;
 
   if (direction == ROTATE_CW) {
@@ -219,6 +292,18 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
     RMag = -1;
     LMag = -1;
   }
+
+  int start_ticks = encoderLPos;
+
+  if (direction == FORWARD || direction == BACKWARD) {
+    leftPrevTicks = encoderLPos;
+    int prev = encoderLPos;
+    for (int i = 20; i < 300; i += 10) {
+      md.setSpeeds(LMag * (i - leftRampupOffset), RMag * (i + rightRampupOffset));
+      delay(rampUpDelay);
+    }
+  } 
+  int leftSpeed = 0, rightSpeed = 0;
   
   leftPrevTicks = encoderLPos;
   rightPrevTicks = encoderRPos;
@@ -226,11 +311,9 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
   delay(iteration_time * 1000);
 
   int totalTicks = (int) (562.25 * dist / (2 * PI * wheel_radius));
-  
-  int start_ticks = encoderLPos;
-  
+ 
   while(1) {
-    if (encoderLPos >= start_ticks + totalTicks - rampUpTicks) break;
+    if (encoderLPos >= start_ticks + totalTicks) break;
 
     //1 grid
 //    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 7.5, 6.0, 0);
@@ -259,8 +342,8 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
     rightPrevTicks = encoderRPos;
 
     if (sense) {  
-      double d1 = readSingleSensor(R2);
-      double d2 = readSingleSensor(L1);
+      double d1 = readSingleSensor(R2, 17);
+      double d2 = readSingleSensor(L1, 17);
       
       if ((d1 <= 13.5 && d1 >= 10) || (d2 <= 13.5 && d2 >= 10)) break;
     }
@@ -270,7 +353,10 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
   integral = 0;
   errorPrior = 0;
   //100, 300 for lab2 lounge 100,250
-  md.setBrakes(100, 200);
+  if (direction == FORWARD || direction == BACKWARD)
+    md.setBrakes(leftBreak, rightBreak);
+  else 
+    md.setBrakes(200, 300);  
   //rampDown();
 }
 
@@ -297,12 +383,12 @@ double ticksToRpm(int tickCount, double period) { // period in seconds
 
 
 void readSensors(bool returnGrid) {
-  double l1 = readSingleSensor(L1);
-  double f3 = readSingleSensor(F3);
-  double r2 = readSingleSensor(R2);
-  double r1 = readSingleSensor(R1);
-  double f1 = readSingleSensor(F1);
-  double back = readSingleSensor(BACK);
+  double l1 = readSingleSensor(L1, 17);
+  double f3 = readSingleSensor(F3, 17);
+  double r2 = readSingleSensor(R2, 17);
+  double r1 = readSingleSensor(R1, 17);
+  double f1 = readSingleSensor(F1, 17);
+  double back = readSingleSensor(BACK, 17);
   String s;
   if (returnGrid) s = stringifyGrid(l1) + ";" + stringifyGrid(back) + ";" + stringifyGrid(r2) + ";" + stringifyGrid(f3) + ";" + stringifyGrid(r1) + ";" + stringifyGrid(f1);
   else s = stringify(l1) + ";" + stringify(back) + ";" + stringify(r2) + ";" + stringify(f3) + ";" + stringify(r1) + ";" + stringify(f1);
@@ -319,17 +405,17 @@ String stringifyGrid(double value) {
   return String((int)(value/10 + 0.5));
 }
 
-float readSingleSensor(int sensorNumber) {
+double readSingleSensor(int sensorNumber, int readTimes) {
   // read the pin 7 times to get median value
-  int sensorVal[READ_TIMES];
-  int sortedSensorVal[READ_TIMES];
-  for (int i = 0; i < READ_TIMES; i++) {
+  int sensorVal[readTimes];
+  int sortedSensorVal[readTimes];
+  for (int i = 0; i < readTimes; i++) {
     sensorVal[i] = analogRead(sensorNumber);   
     //Serial.println(sensorVal[i]);      
     //delay(10);
   }
 
-  int readValue = kthSmallest(sensorVal, 0 ,READ_TIMES-1, READ_TIMES/2);
+  int readValue = kthSmallest(sensorVal, 0 ,readTimes-1, readTimes/2);
 
   if (readValue <= 3) return -10;
 
@@ -405,41 +491,6 @@ int kthSmallest(int arr[], int l, int r, int k)
     return 1000;
 }
 
-//---------------Testing----------------//
-
-
-//ffff;p;k;k;k;k;k;k
-//fffff:n:100:300
-
-void convertCommand(String command) {
-  String curString, split[11];
-  int curIndex = 0, splitId = 0;
-  while (curIndex < command.length()) {
-    curString = "";
-    int index = curIndex;
-    while (index < command.length() && command[index] != ';') {
-      curString += command[index];
-      index++;
-    }
-    split[splitId] = curString;
-    splitId++;
-    curIndex = index + 1;
-    curString = "";
-  }
-
-  if (split[1] == "p") {
-    kpl = split[2].toFloat(); 
-    kil = split[3].toFloat();
-    kdl = split[4].toFloat();
-    kpr = split[5].toFloat();
-    kir = split[6].toFloat();
-    kdr = split[7].toFloat();
-    readCommand(split[0]);
-    
-  } else if (split[1] == "n") {
-    md.setSpeeds(split[2].toFloat(), split[3].toFloat());
-  }
-}
 
 
 
