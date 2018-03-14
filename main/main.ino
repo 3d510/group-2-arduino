@@ -82,6 +82,8 @@ void loop() {
 //  } else {
 //    md.setSpeeds(0,0);
 //  }
+
+ 
 }
 
 
@@ -153,14 +155,6 @@ void adjust() {
   else {
     turnLeft(degreesToTurn);
   }
-//  while (abs(sensorDifference) > adjustEpsilon) {
-//    if (sensorDifference > 0) {
-//      turnRight(1);
-//    }
-//    else {
-//      turnLeft(1);
-//    }
-//  }
 }
 
 
@@ -175,13 +169,15 @@ double getOffset(int noGrid) {
 
 void forward(int noGrid) {
   double offset = getOffset(noGrid);
-  goDigitalDist(70, noGrid * 10 + offset, FORWARD, false);
+  //goDigitalDist(70, noGrid * 10 + offset, FORWARD, false);
+  goDigitalDiff(noGrid * 10 + offset, FORWARD);
   readSensors(true);
 }
 
 void backward(int noGrid) {
   double offset = getOffset(noGrid);
-  goDigitalDist(70, noGrid * 10 + offset, BACKWARD, false);
+  //goDigitalDist(70, noGrid * 10 + offset, BACKWARD, false);
+    goDigitalDiff(noGrid * 10 + offset, BACKWARD);
   readSensors(true);
 }
 
@@ -207,7 +203,7 @@ void doEncoderRight() {
 
 double errorPrior = 0, integral = 0;
 int leftPrevTicks = 0, rightPrevTicks = 0;
-double kpl = 7.0, kil = 0, kdl = 0, kpr = 6.44, kir = 0, kdr = 0;
+double kpl = 7.0, kil = 0, kdl = 0, kpr = 6.44, kir = 0, kdr = 0, kp = 1.6, ki = 0.3, kd = 0.6;
 int leftRampupOffset, rightRampupOffset, rampUpDelay, leftBreak, rightBreak;
 
 
@@ -245,39 +241,35 @@ void convertCommand(String command) {
     rampUpDelay = split[10].toFloat();
     leftBreak = split[11].toFloat();
     rightBreak = split[12].toFloat();
-    
     readCommand(split[0]);
     
   } else if (split[1] == "n") {
     md.setSpeeds(split[2].toFloat(), split[3].toFloat());
+    delay(3000);
+    md.setBrakes(split[4].toFloat(), split[5].toFloat());
+    Serial.println(encoderLPos);
+    Serial.println(encoderRPos);
+    delay(100);
+    md.setSpeeds(-split[2].toFloat(), -split[3].toFloat());
+    delay(3000);
+    md.setBrakes(split[4].toFloat(), split[5].toFloat());
+    Serial.println(encoderLPos);
+    Serial.println(encoderRPos);
+    encoderLPos = 0; 
+    encoderRPos = 0;
+  } else if (split[1] == "d") {
+    kp = split[2].toFloat();
+    ki = split[3].toFloat();
+    kd = split[4].toFloat();
+    leftRampupOffset = split[5].toFloat();
+    rightRampupOffset = split[6].toFloat();
+    rampUpDelay = split[7].toFloat();
+    leftBreak = split[8].toFloat();
+    rightBreak = split[9].toFloat();
+
+    readCommand(split[0]);
   }
 }
-
-int rampUp(double desired_rpm) {
-  leftPrevTicks = encoderLPos;
-  int speedL = 0;
-  int prev = encoderLPos;
-  while (ticksToRpm(encoderLPos - prev, 0.005) < desired_rpm) {
-    delay(5);
-    speedL += 10;
-    md.setSpeeds(speedL + 5, speedL);
-    prev = encoderLPos;
-  }
-//  for (int i = 10; i < desired_rpm; i += 10) {
-//    md.setSpeeds(i+6, i);
-//    delay(5);
-//  }
-  return encoderLPos - leftPrevTicks;
-}
-
-void rampDown(double desired_rpm) {
-  for (int i = desired_rpm; i > 0; i -= 10) {
-    md.setSpeeds(i, i);
-    delay(1);
-  }
-  md.setSpeeds(0, 0);
-}
-
 
 void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {  
   
@@ -315,22 +307,8 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
   while(1) {
     if (encoderLPos >= start_ticks + totalTicks) break;
 
-    //1 grid
-//    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 7.5, 6.0, 0);
-//    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.75, 4.5, 0);
-    
     double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), kpl, kil, kdl);
     double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), kpr, kir, kdr);
-
-    //double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 5.0, 5.75, 0);
-    //double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.75, 4.25, 0);
-    
-    //7.75
-//    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 5.225, 4.75, 0);  
-//    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.75, 4.5, 0);
-
-//    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 4.875, 5.75, 0.08);
-//    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.25, 4.5, 0);
 
     double newLeftSpeed = constrain(abs(leftSpeed) + leftDigitalPidOutput, 0 , 400) * LMag;
     double newRightSpeed = constrain(abs(rightSpeed) + rightDigitalPidOutput, 0 , 400) * RMag;
@@ -360,11 +338,78 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
   //rampDown();
 }
 
+// ffff;d;0.5;0;0;0;0;0;100;100
+// ffff;n;100;100;100;100
+void goDigitalDiff(double dist, int direction) {
+  int LMag = 1, RMag = 1;
+
+  if (direction == ROTATE_CW) {
+    RMag = -1;
+  } 
+  else if (direction == ROTATE_CCW) {
+    LMag = -1;
+  } else if (direction == BACKWARD) {
+    RMag = -1;
+    LMag = -1;
+  }
+
+  int start_ticks = encoderLPos;
+  int leftSpeed = 300, rightSpeed = 300;
+  
+//  if (direction == FORWARD || direction == BACKWARD) {
+//    for (int i = 20; i < 300; i += 10) {
+//      leftSpeed = LMag * (i + leftRampupOffset);
+//      rightSpeed = RMag * (i + rightRampupOffset);
+//      md.setSpeeds(leftSpeed, rightSpeed);
+//      delay(rampUpDelay);
+//    }
+//  } 
+//  Serial.println(encoderLPos);
+  
+  leftPrevTicks = encoderLPos;
+  rightPrevTicks = encoderRPos;
+  
+  delay(iteration_time * 1000);
+
+  int totalTicks = (int) (562.25 * dist / (2 * PI * wheel_radius));
+
+  while(1) {
+    // Serial.println(encoderLPos);
+    if (encoderLPos >= start_ticks + totalTicks || encoderRPos >= start_ticks + totalTicks) 
+      break;
+      
+    double pidOutput = computeDigitalPid(0, encoderLPos - encoderRPos, kp, ki, kd);
+
+    leftSpeed = constrain(leftSpeed + pidOutput, 0, 400);
+    rightSpeed = constrain(rightSpeed - pidOutput, 0, 400);
+    
+    //Serial.println(pidOutput);
+    Serial.print(encoderLPos);
+    Serial.print(" ");
+    Serial.println(encoderRPos);
+    md.setSpeeds(leftSpeed, rightSpeed);
+    leftPrevTicks = encoderLPos;
+    rightPrevTicks = encoderRPos;
+    delay(iteration_time * 1000); // iteration_time in seconds
+  }
+
+  if (direction == FORWARD || direction == BACKWARD)
+    md.setBrakes(leftBreak, rightBreak);
+  else 
+    md.setBrakes(200, 300);  
+
+  integral = 0;
+  errorPrior = 0;
+  encoderLPos = 0;
+  encoderRPos = 0;
+}
+
 int id = 1;
 double computeDigitalPid(double desired_value, double actual_value, double kp, double ki, double kd) {
   //Serial.print(millis());
   //Serial.print(" ");
-  //Serial.println(actual_value);
+  Serial.print("actual ");
+  Serial.println(actual_value);
   double error = desired_value - actual_value;
   integral += (error * iteration_time);
   double derivative = (error - errorPrior)/iteration_time;
@@ -491,6 +536,21 @@ int kthSmallest(int arr[], int l, int r, int k)
     return 1000;
 }
 
+    //1 grid
+//    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 7.5, 6.0, 0);
+//    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.75, 4.5, 0);
+    
+
+
+    //double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 5.0, 5.75, 0);
+    //double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.75, 4.25, 0);
+    
+    //7.75
+//    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 5.225, 4.75, 0);  
+//    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.75, 4.5, 0);
+
+//    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 4.875, 5.75, 0.08);
+//    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.25, 4.5, 0);
 
 
 
