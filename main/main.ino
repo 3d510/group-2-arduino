@@ -70,7 +70,6 @@ void loop() {
     // convertCommand(command);
     readCommand(command);
   }
-
 }
 
 void readCommand(String instruction) {
@@ -97,7 +96,6 @@ void readCommand(String instruction) {
       case 's':
         readSensors(false); break;
       case 'a':
-        //for (int i = 0; i < curCount; i++)
         adjust(); break;
       case 't': //test sensor
         readSingleSensor(L1, 101); break;  
@@ -110,24 +108,34 @@ void readCommand(String instruction) {
 }
 
 void adjust() {  
-  double left = readSingleSensor(L1, 99);
-  double right = readSingleSensor(R2, 99);
-
-  if (left < 0 || right < 0) return;
+  int maxIter = 0;
+  while (maxIter < 10) {
+    if (done) break;
+    double left = readSingleSensor(L1, 99);
+    double right = readSingleSensor(R2, 99);
   
-  double sensorDifference = left - right;
-  Serial.println(left);
-  Serial.println(right);
-  //check dist between sensors
-  int degreesToTurn = atan2(abs(sensorDifference), distBetweenSensors) / PI * 180;
-  Serial.println(degreesToTurn);
-  Serial.println(sensorDifference);
-  if (abs(sensorDifference) < adjustEpsilon) return;
-  if (sensorDifference > 0) {
-    turnRight(degreesToTurn);
-  }
-  else {
-    turnLeft(degreesToTurn);
+    if (left < 0 || right < 0) return;
+    
+    double sensorDifference = left - right;
+    //Serial.println(left);
+    //Serial.println(right);
+    //check dist between sensors
+    int degreesToTurn = atan2(abs(sensorDifference), distBetweenSensors) / PI * 180;
+    if (degreesToTurn > 25) continue;
+    //Serial.println(degreesToTurn);
+    //Serial.println(sensorDifference);
+    if (abs(sensorDifference) < adjustEpsilon) {
+      Serial.println("done");
+      return;
+    }
+    if (sensorDifference > 0) {
+      turnRight(degreesToTurn);
+    }
+    else {
+      turnLeft(degreesToTurn);
+    }  
+    delay(10);
+    maxIter++;
   }
 }
 
@@ -160,6 +168,7 @@ void turnLeft(double angle) {
 
 void turnRight(double angle) {
   goDigitalDist(60, 2*PI*robot_radius * angle/360, ROTATE_CW, false);
+
 }
 
 void doEncoderLeft() {
@@ -227,7 +236,6 @@ void convertCommand(String command) {
     rampUpDelay = split[10].toFloat();
     leftBreak = split[11].toFloat();
     rightBreak = split[12].toFloat();
-    
     readCommand(split[0]);
     
   } else if (split[1] == "n") {
@@ -246,6 +254,7 @@ void convertCommand(String command) {
   }
 }
 
+
 void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {  
   
   int LMag = 1, RMag = 1;
@@ -260,7 +269,6 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
     LMag = -1;
   }
 
-  // dist /= 2;
   ticksDistance = (int) (562.215 * dist / (2 * PI * wheel_radius));
 
 //  Serial.println(ticksDistance);
@@ -379,7 +387,6 @@ void readSensors(bool returnGrid) {
     s = stringifyGrid(l1) + ";" + stringifyGrid(back) + ";" + stringifyGrid(r2) + ";" + stringifyGrid(f3) + ";" + stringifyGrid(r1) + ";" + stringifyGrid(f1);
   else 
     s = stringify(l1) + ";" + stringify(back) + ";" + stringify(r2) + ";" + stringify(f3) + ";" + stringify(r1) + ";" + stringify(f1);
-  //writeString(s);
   Serial.println(s);
 } 
 
@@ -389,7 +396,8 @@ String stringify(double value) {
 
 String stringifyGrid(double value) {
   if (value < 0) return "-1";
-  return String((int)(value/10 + 0.5));
+  if (value < 8.0) return "1";
+  return String((int)(value/10 + 1.5));
 }
 
 double readSingleSensor(int sensorNumber, int readTimes) {
@@ -420,7 +428,7 @@ double readSingleSensor(int sensorNumber, int readTimes) {
     case BACK:
       return 6142.70/(readValue - 3) - 3.088;
     case R2:
-      return 6189.064 / (readValue - 3) - 2.054;
+      return 6725.72/(readValue - 3) - 4.077;
 //      case R2:
 //        return 6787 / (readValue - 3) - 4;
   }
@@ -550,5 +558,20 @@ int kthSmallest(int arr[], int l, int r, int k)
 //}
 
 
+    //1 grid
+//    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 7.5, 6.0, 0);
+//    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.75, 4.5, 0);
+    
+
+
+    //double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 5.0, 5.75, 0);
+    //double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.75, 4.25, 0);
+    
+    //7.75
+//    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 5.225, 4.75, 0);  
+//    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.75, 4.5, 0);
+
+//    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 4.875, 5.75, 0.08);
+//    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.25, 4.5, 0);
 
 
