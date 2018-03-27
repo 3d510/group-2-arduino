@@ -9,7 +9,7 @@
 #define R2 A2
 #define R1 A3
 #define F1 A4
-#define BACK A5 
+#define BACK A5
 
 #define TEST_TIME 0.002
 #define READ_TIMES 17
@@ -25,8 +25,9 @@ const int encoderLPinB = 5;
 const double iteration_time = 0.01;
 const double wheel_radius = 3; // cm
 const double robot_radius = 9.5; // cm
-const double distBetweenSensors = 13.5;
-const double adjustEpsilon = 0.5;
+const double adjustEpsilon = 0.15;
+const double leftTurnAngle = 80;
+const double rightTurnAngle = 82;
 
 volatile int encoderRPos = 0;
 int encoderRPinALast = LOW;
@@ -42,13 +43,14 @@ int ticksDistance = 0;
 double currentPulseTime1 = 0, prevPulseTime1 = 0;
 double currentPulseTime2 = 0, prevPulseTime2 = 0;
 double desired_rpm = 90;
+bool running;
 
 void setup() {
   pinMode (encoderLPinA, INPUT);
   pinMode (encoderLPinB, INPUT);
   pinMode (encoderRPinA, INPUT);
   pinMode (encoderRPinB, INPUT);
-  
+  running = false;
   Serial.begin(9600);
   PCintPort::attachInterrupt(encoderLPinA, &doEncoderLeft, RISING);
   PCintPort::attachInterrupt(encoderRPinA, &doEncoderRight, RISING);
@@ -73,123 +75,176 @@ void loop() {
 }
 
 void readCommand(String instruction) {
+  //  Serial.println(instruction);
+
   int curCount = 0, curId = 0;
   char curChar = instruction[0];
   while (curId < instruction.length()) {
     curChar = instruction[curId];
-    while (curId + curCount < instruction.length() && instruction[curId + curCount] == curChar) 
+    while (curId + curCount < instruction.length() && instruction[curId + curCount] == curChar)
       curCount++;
 
-//    Serial.println(curCount);/
-    
     switch (curChar) {
-      case 'f': 
-        forward(curCount); 
-        // readSensors(true); 
+      case 'f':
+        forward(curCount);
+        readSensors(true);
         break;
       case 'b':
-        backward(curCount); readSensors(true); break;
+        backward(curCount); readSensors(true);
+        break;
       case 'l':
-        turnLeft(88 * curCount); readSensors(true); break;
+        turnLeft(leftTurnAngle * curCount);
+        readSensors(true);
+        break;
       case 'r':
-        turnRight(90 * curCount); readSensors(true); break;      
+        turnRight(rightTurnAngle * curCount);
+        readSensors(true);
+        break;
       case 's':
+        readSensors(true); break;
+      case 'x': //front
+        adjust(true);
+        readSensors(false);
+        break;
+      case 'y': //left
+        adjust(false);
+        readSensors(false);
+        break;
+      case 'z':
         readSensors(false); break;
-      case 'a':
-        adjust(); break;
-      case 't': //test sensor
-        readSingleSensor(L1, 101); break;  
     }
-    
+
     curId += curCount;
     curCount = 0;
   }
-  
+
 }
 
-void adjust() {  
+void adjust(bool isFront) {
+  Serial.println("start calibrating..");
   int maxIter = 0;
-  while (maxIter < 10) {
-    if (done) break;
-    double left = readSingleSensor(L1, 99);
-    double right = readSingleSensor(R2, 99);
-  
-    if (left < 0 || right < 0) return;
-    
-    double sensorDifference = left - right;
-    //Serial.println(left);
-    //Serial.println(right);
-    //check dist between sensors
-    int degreesToTurn = atan2(abs(sensorDifference), distBetweenSensors) / PI * 180;
-    if (degreesToTurn > 25) continue;
-    //Serial.println(degreesToTurn);
-    //Serial.println(sensorDifference);
-    if (abs(sensorDifference) < adjustEpsilon) {
-      Serial.println("done");
-      return;
+  double left;
+  double right;
+  while (1) {
+    if (maxIter == 10) break;
+    double distBetweenSensors;
+
+    if (isFront) {
+      left = readSingleSensor(L1, 51);
+      right = readSingleSensor(R2, 51) + 0.4;
+      distBetweenSensors = 18;
     }
+    else {
+      left = readSingleSensor(R1, 51) + 0.5;
+      right = readSingleSensor(F1, 51);
+      distBetweenSensors = 18.0;
+    }
+    if (left < 0 || right < 0) return;
+
+    double sensorDifference = left - right;
+    //    Serial.println(left);
+    //    Serial.println(right);
+    //check dist between sensors
+    double degreesToTurn = atan2(abs(sensorDifference), distBetweenSensors) / PI * 180;
+    Serial.println(degreesToTurn);
+    if (degreesToTurn > 25) break;
+    Serial.println(sensorDifference);
+    if (abs(sensorDifference) < adjustEpsilon) {
+      break;
+    }
+
+    // Serial.println(degreesToTurn);
     if (sensorDifference > 0) {
       turnRight(degreesToTurn);
     }
     else {
       turnLeft(degreesToTurn);
-    }  
-    delay(10);
+    }
     maxIter++;
   }
+
+  //      Serial.println("done");
+
+  double meanSensorReading = (left + right) / 2;
+  //  if (isFront) {
+  //    adjustDist(meanSensorReading);
+  //  }
+  //  else {
+  //    if (abs(meanSensorReading - 11.8) > 3) {
+  //      turnLeft(leftTurnAngle);
+  //      delay(1000);
+  //      adjust(true);
+  //      delay(1000);
+  //      turnRight(rightTurnAngle);
+  //    }
+  //  }
 }
 
+void adjustDist(double distToWallFront) {
+  //  Serial.print("---");
+  //  Serial.println(distToWallFront);
+
+  if (distToWallFront >= 15) return;
+
+  double distDiff = distToWallFront - 10;
+  int dir;
+  if (distDiff > 0)
+    dir = FORWARD;
+  else
+    dir = BACKWARD;
+
+  if (abs(distDiff) <= adjustEpsilon) return;
+  goDigitalDist(abs(distDiff), dir, false);
+
+}
 
 double getOffset(int noGrid) {
   double offset;
   switch (noGrid) {
     case 1: offset = 0; break;
-    default: offset = -0.3; break;
+    case 2: offset = -1.75; break;
   }
   return offset;
 }
 
 void forward(int noGrid) {
-//  Serial.println(noGrid);
+  //  Serial.println(noGrid);
   double offset = getOffset(noGrid);
-  goDigitalDist(90, noGrid * 10 + offset, FORWARD, false);
+  goDigitalDist(noGrid * 10 + offset, FORWARD, false);
   // goDigitalDiff(noGrid * 10 + offset, FORWARD);
 }
 
 void backward(int noGrid) {
   double offset = getOffset(noGrid);
-  goDigitalDist(90, noGrid * 10 + offset, BACKWARD, false);
+  goDigitalDist(noGrid * 10 + offset, BACKWARD, false);
   //  goDigitalDiff(noGrid * 10 + offset, BACKWARD);
 }
 
 void turnLeft(double angle) {
-  goDigitalDist(60, 2 * PI * robot_radius * angle/360, ROTATE_CCW, false);
+  goDigitalDist(2 * PI * robot_radius * angle / 360, ROTATE_CCW, false);
 }
 
 void turnRight(double angle) {
-  goDigitalDist(60, 2*PI*robot_radius * angle/360, ROTATE_CW, false);
-
+  goDigitalDist(2 * PI * robot_radius * angle / 360, ROTATE_CW, false);
 }
 
 void doEncoderLeft() {
-//  Serial.println(encoderLPos);
-  if (encoderLPos < ticksDistance) {
+  if (encoderLPos <= ticksDistance && !(encoderLPos == 0 && ticksDistance == 0)) {
     encoderLPos++;
-  } else if (encoderLPos == ticksDistance && !(encoderLPos == 0 && ticksDistance == 0)) {
+  } else if (encoderLPos > ticksDistance) {
     brake();
   }
-    
   currentPulseTime1 = micros() - prevPulseTime1;
   prevPulseTime1 = micros();
 }
 
 void doEncoderRight() {
-  if (encoderRPos < ticksDistance) {
+  if (encoderRPos <= ticksDistance && !(encoderRPos == 0 && ticksDistance == 0)) {
     encoderRPos++;
-  } else if (encoderRPos == ticksDistance && !(encoderRPos == 0 && ticksDistance == 0)) {
+  } else if (encoderRPos > ticksDistance) {
     brake();
   }
-  
+
   currentPulseTime2 = micros() - prevPulseTime2;
   prevPulseTime2 = micros();
 }
@@ -225,7 +280,7 @@ void convertCommand(String command) {
   }
 
   if (split[1] == "p") {
-    kpl = split[2].toFloat(); 
+    kpl = split[2].toFloat();
     kil = split[3].toFloat();
     kdl = split[4].toFloat();
     kpr = split[5].toFloat();
@@ -237,7 +292,7 @@ void convertCommand(String command) {
     leftBreak = split[11].toFloat();
     rightBreak = split[12].toFloat();
     readCommand(split[0]);
-    
+
   } else if (split[1] == "n") {
     md.setSpeeds(split[2].toFloat(), split[3].toFloat());
   } else if (split[1] == "d") {
@@ -255,13 +310,17 @@ void convertCommand(String command) {
 }
 
 
-void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {  
-  
+void goDigitalDist(float dist, int direction, bool sense) {
+  // Serial.println("start going...");
+  Serial.println(dist);
+
+  running = true;
+
   int LMag = 1, RMag = 1;
 
   if (direction == ROTATE_CW) {
     RMag = -1;
-  } 
+  }
   else if (direction == ROTATE_CCW) {
     LMag = -1;
   } else if (direction == BACKWARD) {
@@ -269,75 +328,117 @@ void goDigitalDist(double desired_rpm, float dist, int direction, bool sense) {
     LMag = -1;
   }
 
+  double diff_constraint = 5;
+  double desired_rpm = 90;
+  if (dist < 6) {
+    desired_rpm = 30;
+    diff_constraint = 5;
+  }
+
+  if (RMag * LMag == -1) {
+    diff_constraint = 5;
+  }
+
   ticksDistance = (int) (562.215 * dist / (2 * PI * wheel_radius));
 
-//  Serial.println(ticksDistance);
-
   // Ramp up
-   rampUp(LMag, RMag);
-   
+  if (direction != FORWARD && direction != BACKWARD)
+    //rampUp(desired_rpm, diff_constraint, LMag, RMag);
+    goConstSpeed(60, 60, LMag, RMag);
+  else
+    goConstSpeed(85, 90, LMag, RMag);
+
   // PID
-//  double prevRpmL = 0, prevRpmR = 0;
-//  while(1) {    
-//    double leftRpm = getLeftRpm();
-//    double rightRpm = getRightRpm();
-//
-//    Serial.print(leftRpm);
-//    Serial.print(" pid ");
-//    Serial.println(rightRpm);
-//    
-//    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, leftRpm, kpl, kil, kdl);
-//    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, rightRpm, kpr, kir, kdr);
-//
-//    double newLeftRpm = constrain(prevRpmL + leftDigitalPidOutput, 0, 140);
-//    double newRightRpm = constrain(prevRpmR + rightDigitalPidOutput, 0, 140);
-//
-//    motorSetRpm(newLeftRpm, newRightRpm, LMag, RMag);
-//
-//    prevRpmL = newLeftRpm;
-//    prevRpmR = newRightRpm;
-//    delay(iteration_time * 1000);
-//  }
+  //  double prevRpmL = 0, prevRpmR = 0;
+  //  while(1) {
+  //    double leftRpm = getLeftRpm();
+  //    double rightRpm = getRightRpm();
+  //
+  //    Serial.print(leftRpm);
+  //    Serial.print(" pid ");
+  //    Serial.println(rightRpm);
+  //
+  //    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, leftRpm, kpl, kil, kdl);
+  //    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, rightRpm, kpr, kir, kdr);
+  //
+  //    double newLeftRpm = constrain(prevRpmL + leftDigitalPidOutput, 0, 140);
+  //    double newRightRpm = constrain(prevRpmR + rightDigitalPidOutput, 0, 140);
+  //
+  //    motorSetRpm(newLeftRpm, newRightRpm, LMag, RMag);
+  //
+  //    prevRpmL = newLeftRpm;
+  //    prevRpmR = newRightRpm;
+  //    delay(iteration_time * 1000);
+  //  }
+
 }
 
 double computeDigitalPid(double desired_value, double actual_value, double kp, double ki, double kd) {
   double error = desired_value - actual_value;
   integral += (error * iteration_time);
-  double derivative = (error - errorPrior)/iteration_time;
+  double derivative = (error - errorPrior) / iteration_time;
   double output = kp * error + ki * integral + kd * derivative;
   errorPrior = error;
   return output;
 }
 
-void rampUp(int directionL, int directionR) {
-  
+void goConstSpeed(double rpm1, double rpm2, int directionL, int directionR) {
+  while (running) {
+    Serial.print("");
+    motorSetRpm(rpm1, rpm2, directionL, directionR);
+    delay(iteration_time * 1000);
+  }
+  // Serial.println("outside");
+}
+
+void rampUp(double desired_rpm, double diff_constraint, int directionL, int directionR) {
+
   double currentLRampup = 0, currentRRampup = 0;
 
-  double start_time = micros();
-  
-  while (currentLRampup < desired_rpm && currentRRampup < desired_rpm) { 
-    double leftRpm = getLeftRpm();
-    double rightRpm = getRightRpm();
+  //  double start_time = micros();
 
-    Serial.print(leftRpm);
-    Serial.print(" rampup ");
-    Serial.println(rightRpm);
+  //  Serial.println(desired_rpm);
+  double leftRpm = 0;
+  double rightRpm = 0;
+  while (running && leftRpm < desired_rpm && rightRpm < desired_rpm) {
 
-    double diff_constraint = 2;
+    // Serial.println("inside ramp up...");
+
+    leftRpm = getLeftRpm();
+    rightRpm = getRightRpm();
+
+    //    Serial.print(leftRpm);
+    //    Serial.print(" rampup ");
+    //    Serial.println(rightRpm);
+
     double diff = leftRpm - rightRpm;
+
     if (abs(diff) <  diff_constraint) {
       currentLRampup += diff_constraint;
       currentRRampup += diff_constraint;
     }
-    else if (diff > 0) currentRRampup += diff_constraint;
-    else currentLRampup += diff_constraint;
+    else if (diff > 0) {
+      currentRRampup += diff / 2;
+      currentLRampup -= diff / 2;
+    }
+    else {
+      currentLRampup -= diff / 2;
+      currentRRampup += diff / 2;
+    }
 
-    if (micros() < start_time + 40000) 
-      currentRRampup = 0;
-      
-    motorSetRpm(currentLRampup, currentRRampup, directionL, directionR);
+    //    if (micros() < start_time + 40000)
+    //      currentRRampup = 0;
+
+    if (running)
+      motorSetRpm(currentLRampup, currentRRampup, directionL, directionR);
     delay(iteration_time * 1000);
   }
+  // Serial.println("outside ramp up...");
+
+  //  Seria/l.print(leftRpm);
+  //  Serial.p/rint(" after ");
+  //  Serial.prin/tln(rightRpm);
+
 }
 
 void motorSetRpm(float rpmL, float rpmR, int directionL, int directionR) {
@@ -359,16 +460,21 @@ double getRightRpm() {
 }
 
 void brake() {
-  Serial.println("braking...");
-  
+  // Serial.println("braking...");
+
+
+  md.setBrakes(400, 400);
+  // md.setSpeeds(0,0);
+
+  //  readSensors(true);
+
   integral = 0;
   errorPrior = 0;
   encoderLPos = 0;
   encoderRPos = 0;
   ticksDistance = 0;
-
-  md.setBrakes(400,400);
-  md.setSpeeds(0,0);
+  running = false;
+  // Serial.println(running);
 }
 
 
@@ -376,28 +482,34 @@ void brake() {
 
 
 void readSensors(bool returnGrid) {
-  double l1 = readSingleSensor(L1, 17);
-  double f3 = readSingleSensor(F3, 17);
-  double r2 = readSingleSensor(R2, 17);
-  double r1 = readSingleSensor(R1, 17);
-  double f1 = readSingleSensor(F1, 17);
-  double back = readSingleSensor(BACK, 17);
+  double l1 = readSingleSensor(L1, 17) - 5.1;
+  double f3 = readSingleSensor(F3, 17) - 14.5;
+  double r2 = readSingleSensor(R2, 17) - 5.3;
+  double r1 = readSingleSensor(R1, 17) - 7.7;
+  double f1 = readSingleSensor(F1, 17) - 7.3;
+  double back = readSingleSensor(BACK, 17) - 2.1;
   String s;
-  if (returnGrid) 
-    s = stringifyGrid(l1) + ";" + stringifyGrid(back) + ";" + stringifyGrid(r2) + ";" + stringifyGrid(f3) + ";" + stringifyGrid(r1) + ";" + stringifyGrid(f1);
-  else 
+  if (returnGrid)
+    s = stringifyGrid(l1, false) + ";" + stringifyGrid(back, false) + ";" + stringifyGrid(r2, false) + ";" + stringifyGrid(f3, true) + ";" + stringifyGrid(r1, false) + ";" + stringifyGrid(f1, false);
+  else
     s = stringify(l1) + ";" + stringify(back) + ";" + stringify(r2) + ";" + stringify(f3) + ";" + stringify(r1) + ";" + stringify(f1);
   Serial.println(s);
-} 
+}
 
 String stringify(double value) {
   return String(value);
 }
 
-String stringifyGrid(double value) {
-  if (value < 0) return "-1";
-  if (value < 8.0) return "1";
-  return String((int)(value/10 + 1.5));
+String stringifyGrid(double value, bool isLong) {
+  if (isLong && value > 0 && value <= 60) {
+    return String(int(value / 10.0));
+  }
+  if (value < 0 || value > 23)
+    return "-1";
+  if (value <= 13)
+    return "1";
+  else if (value <= 23)
+    return "2";
 }
 
 double readSingleSensor(int sensorNumber, int readTimes) {
@@ -405,46 +517,52 @@ double readSingleSensor(int sensorNumber, int readTimes) {
   int sensorVal[readTimes];
   int sortedSensorVal[readTimes];
   for (int i = 0; i < readTimes; i++) {
-    sensorVal[i] = analogRead(sensorNumber);   
-    Serial.println(sensorVal[i]);      
+    sensorVal[i] = analogRead(sensorNumber);
+    //    Serial.println(sensorVal[i]);
     //delay(10);
   }
 
-  int readValue = kthSmallest(sensorVal, 0 ,readTimes-1, readTimes/2);
+  int readValue = kthSmallest(sensorVal, 0 , readTimes - 1, readTimes / 2);
 
   if (readValue <= 3) return -10;
 
+  return convertAdcToCent(sensorNumber, readValue);
+
+}
+
+double convertAdcToCent(int sensorNumber, double readValue) {
   // deduce distance from value read from analog pin
   switch (sensorNumber) {
-    case F1: 
-      return 5452.08/(readValue - 3) - 1.246;
-    case R1: 
-      return 6534.06/(readValue - 3) - 3.83;
+    case F1:
+      return 5452.08 / (readValue - 3) - 1.246;
+    case R1:
+      return 6534.06 / (readValue - 3) - 3.83;
     case L1:
-      Serial.println(6270.15/(readValue - 3) - 2.8977);
-      return 6270.15/(readValue - 3) - 1.8977;
+      //      Serial.println(6270.15/(readValue - 3) - 2.8977);
+      // return (1 / (0.0002391473 * readValue - 0.0100251467));
+      return 6270.15 / (readValue - 3) - 2.8977;
     case F3:
-      return 14054.34/(readValue - 3) - 5.472;
+      return 14054.34 / (readValue - 3) - 5.472;
     case BACK:
-      return 6142.70/(readValue - 3) - 3.088;
+      return 6142.70 / (readValue - 3) - 3.088;
+    // return (1 / (0.0002391473 * readValue - 0.0100251467));
     case R2:
-      return 6725.72/(readValue - 3) - 4.077;
-//      case R2:
-//        return 6787 / (readValue - 3) - 4;
+      return 6725.72 / (readValue - 3) - 4.077;
+      // return (1 / (0.0002391473 * readValue - 0.0100251467));
   }
 }
 
 int partition(int arr[], int l, int r)
 {
-    int x = arr[r], i = l;
-    for (int j = l; j <= r - 1; j++) {
-        if (arr[j] <= x) {
-            swap(&arr[i], &arr[j]);
-            i++;
-        }
+  int x = arr[r], i = l;
+  for (int j = l; j <= r - 1; j++) {
+    if (arr[j] <= x) {
+      swap(&arr[i], &arr[j]);
+      i++;
     }
-    swap(&arr[i], &arr[r]);
-    return i;
+  }
+  swap(&arr[i], &arr[r]);
+  return i;
 }
 
 void swap(int* a, int* b) {
@@ -452,39 +570,39 @@ void swap(int* a, int* b) {
   *a = *b;
   *b = tmp;
 }
- 
-// This function returns k'th smallest 
-// element in arr[l..r] using QuickSort 
+
+// This function returns k'th smallest
+// element in arr[l..r] using QuickSort
 // based method.  ASSUMPTION: ALL ELEMENTS
 // IN ARR[] ARE DISTINCT
 int kthSmallest(int arr[], int l, int r, int k)
 {
-    // If k is smaller than number of 
-    // elements in array
-    if (k > 0 && k <= r - l + 1) {
- 
-        // Partition the array around last 
-        // element and get position of pivot 
-        // element in sorted array
-        int index = partition(arr, l, r);
- 
-        // If position is same as k
-        if (index - l == k - 1)
-            return arr[index];
- 
-        // If position is more, recur 
-        // for left subarray
-        if (index - l > k - 1) 
-            return kthSmallest(arr, l, index - 1, k);
- 
-        // Else recur for right subarray
-        return kthSmallest(arr, index + 1, r, 
-                            k - index + l - 1);
-    }
- 
-    // If k is more than number of 
-    // elements in array
-    return 1000;
+  // If k is smaller than number of
+  // elements in array
+  if (k > 0 && k <= r - l + 1) {
+
+    // Partition the array around last
+    // element and get position of pivot
+    // element in sorted array
+    int index = partition(arr, l, r);
+
+    // If position is same as k
+    if (index - l == k - 1)
+      return arr[index];
+
+    // If position is more, recur
+    // for left subarray
+    if (index - l > k - 1)
+      return kthSmallest(arr, l, index - 1, k);
+
+    // Else recur for right subarray
+    return kthSmallest(arr, index + 1, r,
+                       k - index + l - 1);
+  }
+
+  // If k is more than number of
+  // elements in array
+  return 1000;
 }
 
 //void goDigitalDiff(double dist, int direction) {
@@ -492,7 +610,7 @@ int kthSmallest(int arr[], int l, int r, int k)
 //
 //  if (direction == ROTATE_CW) {
 //    RMag = -1;
-//  } 
+//  }
 //  else if (direction == ROTATE_CCW) {
 //    LMag = -1;
 //  } else if (direction == BACKWARD) {
@@ -502,7 +620,7 @@ int kthSmallest(int arr[], int l, int r, int k)
 //
 //  int start_ticks = encoderLPos;
 //  int leftSpeed = 0, rightSpeed = 0;
-//  
+//
 //  if (direction == FORWARD || direction == BACKWARD) {
 //    for (int i = 20; i < 300; i += 10) {
 //      leftSpeed = LMag * (i + leftRampupOffset);
@@ -510,9 +628,9 @@ int kthSmallest(int arr[], int l, int r, int k)
 //      md.setSpeeds(leftSpeed, rightSpeed);
 //      delay(rampUpDelay);
 //    }
-//  } 
+//  }
 ////  Serial.println(encoderLPos);
-//  
+//
 //  leftPrevTicks = encoderLPos;
 //  rightPrevTicks = encoderRPos;
 //
@@ -522,15 +640,15 @@ int kthSmallest(int arr[], int l, int r, int k)
 //
 //  while(1) {
 //    // Serial.println(encoderLPos);
-//    if (encoderLPos >= start_ticks + totalTicks) 
+//    if (encoderLPos >= start_ticks + totalTicks)
 //      break;
-//      
+//
 ////    double pidOutput = abs(computeDigitalPid(0, /ticksToRpm((encoderLPos - leftPrevTicks) - (encoderRPos - rightPrevTicks), iteration_time), kp, ki, kd));
 //    double pidOutput = computeDigitalPid(0, -encoderLPos + encoderRPos, kp, ki, kd);
 //
 //    leftSpeed = constrain(leftSpeed - pidOutput/50, 0, 255) / 255 * 400;
 //    rightSpeed = constrain(rightSpeed + pidOutput/50, 0, 255) / 255 * 400;
-//    
+//
 ////    if (leftSpeed > rightSpeed) {
 ////      leftSpeed = constrain(abs(leftSpeed) - pidOutput, 0 , 400) * LMag;
 ////      rightSpeed = constrain(abs(rightSpeed) + pidOutput, 0 , 400) * RMag;
@@ -553,22 +671,22 @@ int kthSmallest(int arr[], int l, int r, int k)
 //  //100, 300 for lab2 lounge 100,250
 //  if (direction == FORWARD || direction == BACKWARD)
 //    md.setBrakes(leftBreak, rightBreak);
-//  else 
-//    md.setBrakes(200, 300);  
+//  else
+//    md.setBrakes(200, 300);
 //}
 
 
-    //1 grid
+//1 grid
 //    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 7.5, 6.0, 0);
 //    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.75, 4.5, 0);
-    
 
 
-    //double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 5.0, 5.75, 0);
-    //double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.75, 4.25, 0);
-    
-    //7.75
-//    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 5.225, 4.75, 0);  
+
+//double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 5.0, 5.75, 0);
+//double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.75, 4.25, 0);
+
+//7.75
+//    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 5.225, 4.75, 0);
 //    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderRPos - rightPrevTicks, iteration_time), 7.75, 4.5, 0);
 
 //    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, ticksToRpm(encoderLPos - leftPrevTicks, iteration_time), 4.875, 5.75, 0.08);
