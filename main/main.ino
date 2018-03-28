@@ -26,8 +26,8 @@ const double iteration_time = 0.01;
 const double wheel_radius = 3; // cm
 const double robot_radius = 9.5; // cm
 const double adjustEpsilon = 0.15;
-const double leftTurnAngle = 80;
-const double rightTurnAngle = 82;
+const double leftTurnAngle = 83;
+const double rightTurnAngle = 83;
 
 volatile int encoderRPos = 0;
 int encoderRPinALast = LOW;
@@ -104,11 +104,11 @@ void readCommand(String instruction) {
         readSensors(true); break;
       case 'x': //front
         adjust(true);
-        readSensors(false);
+        readSensors(true);
         break;
       case 'y': //left
         adjust(false);
-        readSensors(false);
+        readSensors(true);
         break;
       case 'z':
         readSensors(false); break;
@@ -121,7 +121,7 @@ void readCommand(String instruction) {
 }
 
 void adjust(bool isFront) {
-  Serial.println("start calibrating..");
+  // Serial.println("start calibrating..");
   int maxIter = 0;
   double left;
   double right;
@@ -130,29 +130,31 @@ void adjust(bool isFront) {
     double distBetweenSensors;
 
     if (isFront) {
-      left = readSingleSensor(L1, 51);
-      right = readSingleSensor(R2, 51) + 0.4;
+      left = readSingleSensor(L1, 51) - 4.9;
+      right = readSingleSensor(R2, 51) - 5.3;
       distBetweenSensors = 18;
     }
     else {
-      left = readSingleSensor(R1, 51) + 0.5;
+      left = readSingleSensor(R1, 51);
       right = readSingleSensor(F1, 51);
       distBetweenSensors = 18.0;
     }
     if (left < 0 || right < 0) return;
 
     double sensorDifference = left - right;
+    if (sensorDifference > 20) return;
+    if (sensorDifference > 10) sensorDifference -= 10; 
     //    Serial.println(left);
     //    Serial.println(right);
     //check dist between sensors
     double degreesToTurn = atan2(abs(sensorDifference), distBetweenSensors) / PI * 180;
-    Serial.println(degreesToTurn);
+    // Serial.println(degreesToTurn);
     if (degreesToTurn > 25) break;
-    Serial.println(sensorDifference);
+    degreesToTurn = constrain(degreesToTurn, 0, 5);
+    // Serial.println(sensorDifference);
     if (abs(sensorDifference) < adjustEpsilon) {
       break;
     }
-
     // Serial.println(degreesToTurn);
     if (sensorDifference > 0) {
       turnRight(degreesToTurn);
@@ -166,9 +168,9 @@ void adjust(bool isFront) {
   //      Serial.println("done");
 
   double meanSensorReading = (left + right) / 2;
-  //  if (isFront) {
-  //    adjustDist(meanSensorReading);
-  //  }
+    if (isFront) {
+      adjustDist(meanSensorReading);
+    }
   //  else {
   //    if (abs(meanSensorReading - 11.8) > 3) {
   //      turnLeft(leftTurnAngle);
@@ -184,7 +186,7 @@ void adjustDist(double distToWallFront) {
   //  Serial.print("---");
   //  Serial.println(distToWallFront);
 
-  if (distToWallFront >= 15) return;
+  if (distToWallFront > 13) return;
 
   double distDiff = distToWallFront - 10;
   int dir;
@@ -312,7 +314,7 @@ void convertCommand(String command) {
 
 void goDigitalDist(float dist, int direction, bool sense) {
   // Serial.println("start going...");
-  Serial.println(dist);
+  // Serial.println(dist);
 
   running = true;
 
@@ -329,9 +331,9 @@ void goDigitalDist(float dist, int direction, bool sense) {
   }
 
   double diff_constraint = 5;
-  double desired_rpm = 90;
+  double desired_rpm = 80;
   if (dist < 6) {
-    desired_rpm = 30;
+    desired_rpm = 60;
     diff_constraint = 5;
   }
 
@@ -342,35 +344,42 @@ void goDigitalDist(float dist, int direction, bool sense) {
   ticksDistance = (int) (562.215 * dist / (2 * PI * wheel_radius));
 
   // Ramp up
-  if (direction != FORWARD && direction != BACKWARD)
     //rampUp(desired_rpm, diff_constraint, LMag, RMag);
-    goConstSpeed(60, 60, LMag, RMag);
-  else
-    goConstSpeed(85, 90, LMag, RMag);
+  // goConstSpeed(desired_rpm, desired_rpm, LMag, RMag);  
+   motorSetRpm(desired_rpm + 20, desired_rpm + 17.5, LMag, RMag);
+//  md.setSpeeds(400,400);
+  while (running) {
+    if (abs(desired_rpm - getLeftRpm()) < 1) 
+      break;
+    Serial.print("");
+    Serial.print(getLeftRpm());
+    Serial.print(" ramp ");
+    Serial.println(getRightRpm());
+  }
 
   // PID
-  //  double prevRpmL = 0, prevRpmR = 0;
-  //  while(1) {
-  //    double leftRpm = getLeftRpm();
-  //    double rightRpm = getRightRpm();
-  //
-  //    Serial.print(leftRpm);
-  //    Serial.print(" pid ");
-  //    Serial.println(rightRpm);
-  //
-  //    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, leftRpm, kpl, kil, kdl);
-  //    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, rightRpm, kpr, kir, kdr);
-  //
-  //    double newLeftRpm = constrain(prevRpmL + leftDigitalPidOutput, 0, 140);
-  //    double newRightRpm = constrain(prevRpmR + rightDigitalPidOutput, 0, 140);
-  //
-  //    motorSetRpm(newLeftRpm, newRightRpm, LMag, RMag);
-  //
-  //    prevRpmL = newLeftRpm;
-  //    prevRpmR = newRightRpm;
-  //    delay(iteration_time * 1000);
-  //  }
+  double prevRpmL = desired_rpm, prevRpmR = desired_rpm;
+  while(running) {
+    double leftRpm = getLeftRpm();
+    double rightRpm = getRightRpm();
 
+    Serial.print("");
+    Serial.print(leftRpm);
+    Serial.print(" pid ");
+    Serial.println(rightRpm);
+
+    double leftDigitalPidOutput = computeDigitalPid(desired_rpm, leftRpm, kpl, kil, kdl);
+    double rightDigitalPidOutput = computeDigitalPid(desired_rpm, rightRpm, kpr, kir, kdr);
+
+    double newLeftRpm = constrain(prevRpmL + leftDigitalPidOutput, 0, 140);
+    double newRightRpm = constrain(prevRpmR + rightDigitalPidOutput, 0, 140);
+
+    if (running) motorSetRpm(newLeftRpm, newRightRpm, LMag, RMag);
+
+    prevRpmL = newLeftRpm;
+    prevRpmR = newRightRpm;
+    delay(iteration_time * 1000);
+  }
 }
 
 double computeDigitalPid(double desired_value, double actual_value, double kp, double ki, double kd) {
@@ -388,7 +397,7 @@ void goConstSpeed(double rpm1, double rpm2, int directionL, int directionR) {
     motorSetRpm(rpm1, rpm2, directionL, directionR);
     delay(iteration_time * 1000);
   }
-  // Serial.println("outside");
+  Serial.println("outside");
 }
 
 void rampUp(double desired_rpm, double diff_constraint, int directionL, int directionR) {
@@ -463,7 +472,7 @@ void brake() {
   // Serial.println("braking...");
 
 
-  md.setBrakes(400, 400);
+  md.setBrakes(400, 350);
   // md.setSpeeds(0,0);
 
   //  readSensors(true);
@@ -482,11 +491,11 @@ void brake() {
 
 
 void readSensors(bool returnGrid) {
-  double l1 = readSingleSensor(L1, 17) - 5.1;
-  double f3 = readSingleSensor(F3, 17) - 14.5;
-  double r2 = readSingleSensor(R2, 17) - 5.3;
-  double r1 = readSingleSensor(R1, 17) - 7.7;
-  double f1 = readSingleSensor(F1, 17) - 7.3;
+  double l1 = readSingleSensor(L1, 51) - 5.1;
+  double f3 = readSingleSensor(F3, 51) - 14.5;
+  double r2 = readSingleSensor(R2, 51) - 5.3;
+  double r1 = readSingleSensor(R1, 51) - 7.7;
+  double f1 = readSingleSensor(F1, 51) - 7.3;
   double back = readSingleSensor(BACK, 17) - 2.1;
   String s;
   if (returnGrid)
@@ -502,7 +511,7 @@ String stringify(double value) {
 
 String stringifyGrid(double value, bool isLong) {
   if (isLong && value > 0 && value <= 60) {
-    return String(int(value / 10.0));
+    return String(int(value / 10.0) + 1);
   }
   if (value < 0 || value > 23)
     return "-1";
@@ -513,11 +522,14 @@ String stringifyGrid(double value, bool isLong) {
 }
 
 double readSingleSensor(int sensorNumber, int readTimes) {
-  // read the pin 7 times to get median value
+  int temp_value[7];
   int sensorVal[readTimes];
   int sortedSensorVal[readTimes];
   for (int i = 0; i < readTimes; i++) {
-    sensorVal[i] = analogRead(sensorNumber);
+    for (int j = 0; j < 7; j++) 
+      temp_value[j] = analogRead(sensorNumber);
+    
+    sensorVal[i] = kthSmallest(temp_value, 0, 6, 3);
     //    Serial.println(sensorVal[i]);
     //delay(10);
   }
